@@ -1,0 +1,52 @@
+🤖 JARVIS AI Assistant - Demo Commands
+
+Try these commands in your GUI chatbot:
+
+📊 SYSTEM CONTROL:
+• "set volume 50"
+• "mute"
+• "unmute" 
+• "get volume"
+• "hide desktop icons"
+• "show desktop icons"
+
+📸 MEDIA & PHOTOS:
+• "take screenshot"
+• "open camera"
+• "open photos app"
+
+📁 FILE OPERATIONS:
+• "create a file called test.txt with current time"
+• "create a folder called MyFolder"
+• "list files in current directory"
+
+🔧 SYSTEM INFO:
+• "get system information"
+• "check disk space"
+• "show running processes"
+
+💻 ADVANCED TASKS:
+• "install requests package"
+• "download a file from a URL"
+• "send an email"
+• "create a backup of important files"
+
+🎨 CREATIVE TASKS:
+• "generate a random password"
+• "create a QR code"
+• "resize an image"
+• "convert text to speech"
+
+🌐 NETWORK & WEB:
+• "check internet connection"
+• "get my IP address"
+• "ping google.com"
+• "download weather data"
+
+🚀 The AI will automatically:
+• Install missing packages
+• Learn from failures
+• Improve its capabilities
+• Execute complex tasks
+
+Just type any request and JARVIS will handle it!
