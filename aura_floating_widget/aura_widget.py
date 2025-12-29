@@ -48,12 +48,22 @@ except ImportError as e:
     AURA_AVAILABLE = False
     print(f"AURA components not available: {e}")
 
-# Try to import voice
+# Try to import voice output (TTS)
 try:
     import pyttsx3
-    VOICE_AVAILABLE = True
+    TTS_AVAILABLE = True
 except ImportError:
-    VOICE_AVAILABLE = False
+    TTS_AVAILABLE = False
+
+# Try to import voice input (Speech Recognition)
+try:
+    import speech_recognition as sr
+    STT_AVAILABLE = True
+except ImportError:
+    STT_AVAILABLE = False
+    print("Speech recognition not available. Install with: pip install SpeechRecognition")
+
+VOICE_AVAILABLE = TTS_AVAILABLE  # For backward compatibility
 
 
 class AuraPersonality:
@@ -200,7 +210,7 @@ class VoiceThread(QThread):
         self.text = text
         
     def run(self):
-        if not VOICE_AVAILABLE:
+        if not TTS_AVAILABLE:
             return
         try:
             engine = pyttsx3.init()
@@ -217,6 +227,57 @@ class VoiceThread(QThread):
             engine.runAndWait()
         except Exception as e:
             print(f"Voice error: {e}")
+
+
+class SpeechRecognitionThread(QThread):
+    """Background thread for speech recognition - voice input"""
+    recognized = pyqtSignal(str)  # Signal emitted when speech is recognized
+    error = pyqtSignal(str)  # Signal emitted on error
+    listening_started = pyqtSignal()  # Signal when listening starts
+    listening_stopped = pyqtSignal()  # Signal when listening stops
+    
+    def __init__(self):
+        super().__init__()
+        self.is_listening = False
+        
+    def run(self):
+        if not STT_AVAILABLE:
+            self.error.emit("Speech recognition not available. Install SpeechRecognition.")
+            return
+            
+        try:
+            recognizer = sr.Recognizer()
+            microphone = sr.Microphone()
+            
+            with microphone as source:
+                # Calibrate for ambient noise
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                self.listening_started.emit()
+                self.is_listening = True
+                
+                # Listen for speech
+                try:
+                    audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+                except sr.WaitTimeoutError:
+                    self.error.emit("No speech detected. Try again.")
+                    self.listening_stopped.emit()
+                    return
+            
+            self.listening_stopped.emit()
+            self.is_listening = False
+            
+            # Recognize speech using Google's service
+            try:
+                text = recognizer.recognize_google(audio)
+                self.recognized.emit(text)
+            except sr.UnknownValueError:
+                self.error.emit("Didn't catch that. Please try again.")
+            except sr.RequestError as e:
+                self.error.emit(f"Speech service unavailable: {e}")
+                
+        except Exception as e:
+            self.listening_stopped.emit()
+            self.error.emit(f"Microphone error: {str(e)}")
 
 
 class ProcessingThread(QThread):
@@ -544,6 +605,26 @@ class AuraFloatingWidget(QWidget):
         """)
         input_layout.addWidget(self.input_field)
         
+        # Microphone button for voice input
+        self.mic_btn = QPushButton("🎤")
+        self.mic_btn.setFixedSize(40, 40)
+        self.mic_btn.clicked.connect(self.toggle_voice_input)
+        self.mic_btn.setToolTip("Click to speak")
+        self.mic_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(0, 212, 255, 0.3);
+                border-radius: 20px;
+                color: white;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 212, 255, 0.3);
+                border-color: rgba(0, 212, 255, 0.6);
+            }
+        """)
+        input_layout.addWidget(self.mic_btn)
+        
         # Send button
         self.send_btn = QPushButton("▶")
         self.send_btn.setFixedSize(40, 40)
@@ -570,6 +651,10 @@ class AuraFloatingWidget(QWidget):
             }
         """)
         input_layout.addWidget(self.send_btn)
+        
+        # Initialize speech recognition thread
+        self.speech_thread = None
+        self.is_listening = False
         
         content_layout.addLayout(input_layout)
         
@@ -738,6 +823,72 @@ class AuraFloatingWidget(QWidget):
             personality_response = self.personality.get_error_response("failed")
             full_response = f"{personality_response}\n\n{response}" if response else personality_response
             self.show_message(full_response, "error")
+    
+    def toggle_voice_input(self):
+        """Toggle voice input - start/stop listening"""
+        if not STT_AVAILABLE:
+            self.show_message("Voice input not available.\nInstall: pip install SpeechRecognition pyaudio", "error")
+            return
+            
+        if self.is_listening:
+            self.stop_listening()
+        else:
+            self.start_listening()
+    
+    def start_listening(self):
+        """Start listening for voice input"""
+        self.is_listening = True
+        self.orb.set_state("listening")
+        self.subtitle.setText("Listening...")
+        self.mic_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 71, 87, 0.5);
+                border: 2px solid rgba(255, 71, 87, 0.8);
+                border-radius: 20px;
+                color: white;
+                font-size: 16px;
+            }
+        """)
+        self.show_message("Listening... Speak now.", "warning")
+        
+        # Start speech recognition thread
+        self.speech_thread = SpeechRecognitionThread()
+        self.speech_thread.recognized.connect(self.on_speech_recognized)
+        self.speech_thread.error.connect(self.on_speech_error)
+        self.speech_thread.listening_stopped.connect(self.stop_listening)
+        self.speech_thread.start()
+    
+    def stop_listening(self):
+        """Stop listening and reset UI"""
+        self.is_listening = False
+        self.orb.set_state("idle")
+        self.subtitle.setText("Neural Interface Active")
+        self.mic_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(0, 212, 255, 0.3);
+                border-radius: 20px;
+                color: white;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 212, 255, 0.3);
+                border-color: rgba(0, 212, 255, 0.6);
+            }
+        """)
+    
+    def on_speech_recognized(self, text):
+        """Handle recognized speech"""
+        self.stop_listening()
+        self.input_field.setText(text)
+        self.show_message(f"Heard: \"{text}\"", "success")
+        # Auto-execute the command
+        QTimer.singleShot(500, self.send_command)
+    
+    def on_speech_error(self, error_msg):
+        """Handle speech recognition error"""
+        self.stop_listening()
+        self.show_message(self.personality.get_error_response("not_understood") + f"\n\n{error_msg}", "error")
 
 
 def main():
