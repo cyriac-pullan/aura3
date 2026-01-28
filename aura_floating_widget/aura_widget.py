@@ -907,7 +907,7 @@ class SettingsDialog(QWidget):
             Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setFixedSize(400, 280)
+        self.setFixedSize(400, 380)
         
         # Main layout
         layout = QVBoxLayout(self)
@@ -963,6 +963,70 @@ class SettingsDialog(QWidget):
         header.addWidget(close_btn)
         
         container_layout.addLayout(header)
+        
+        # User Name input
+        name_label = QLabel("Your Name")
+        name_label.setStyleSheet("""
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+        """)
+        container_layout.addWidget(name_label)
+        
+        name_layout = QHBoxLayout()
+        name_layout.setSpacing(10)
+        
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Enter your name...")
+        self.name_input.returnPressed.connect(self.save_user_name)
+        self.name_input.setStyleSheet("""
+            QLineEdit {
+                background: rgba(0, 0, 0, 0.4);
+                border: 1px solid rgba(0, 212, 255, 0.3);
+                border-radius: 10px;
+                padding: 10px 15px;
+                color: white;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border-color: rgba(0, 212, 255, 0.7);
+            }
+        """)
+        
+        # Load current name
+        try:
+            from user_config import get_user_name
+            current_name = get_user_name()
+            self.name_input.setText(current_name)
+        except:
+            pass
+        
+        name_layout.addWidget(self.name_input)
+        
+        save_name_btn = QPushButton("Save")
+        save_name_btn.setFixedSize(70, 40)
+        save_name_btn.clicked.connect(self.save_user_name)
+        save_name_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #00d4ff, stop:1 #7b68ee
+                );
+                border: none;
+                border-radius: 10px;
+                color: white;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #00e5ff, stop:1 #9370db
+                );
+            }
+        """)
+        name_layout.addWidget(save_name_btn)
+        
+        container_layout.addLayout(name_layout)
         
         # API Key input
         api_label = QLabel("Gemini API Key")
@@ -1093,6 +1157,30 @@ class SettingsDialog(QWidget):
                                 break
             except:
                 pass
+    
+    def save_user_name(self):
+        """Save user name to config file"""
+        name = self.name_input.text().strip()
+        
+        if not name:
+            self.status_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
+            self.status_label.setText("Please enter your name")
+            return
+        
+        try:
+            from user_config import set_user_name
+            set_user_name(name)
+            
+            # Update parent widget's personality if it exists
+            if self.parent_widget and hasattr(self.parent_widget, 'personality'):
+                self.parent_widget.personality.user_name = name
+            
+            self.status_label.setStyleSheet("color: #00ff88; font-size: 11px;")
+            self.status_label.setText(f"Name saved! Hello, {name}!")
+            
+        except Exception as e:
+            self.status_label.setStyleSheet("color: #ff6b6b; font-size: 11px;")
+            self.status_label.setText(f"Error: {str(e)[:30]}")
     
     def save_api_key(self):
         """Save API key to .env file"""
@@ -1784,8 +1872,8 @@ class AuraFloatingWidget(QWidget):
         self.input_field.setFocus()
         
     def toggle_minimize(self):
-        """Minimize to taskbar"""
-        self.showMinimized()
+        """Minimize to system tray (hide window)"""
+        self.hide_to_tray()
         
     def quit_application(self):
         if VOICE_AVAILABLE:

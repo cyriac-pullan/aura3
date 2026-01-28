@@ -939,6 +939,8 @@ class FunctionExecutor:
             import webbrowser
             import time
             import urllib.parse
+            import io
+            import sys
             
             # Create a rich execution environment with commonly needed modules
             exec_globals = {
@@ -966,11 +968,30 @@ class FunctionExecutor:
             
             exec_locals = {}
             
-            logging.info(f"Executing generated code ({len(code)} chars)")
-            exec(code, exec_globals, exec_locals)
+            # Capture stdout to get print() output
+            old_stdout = sys.stdout
+            sys.stdout = captured_output = io.StringIO()
             
-            # Try to get the result
-            result = exec_locals.get("result", True)
+            try:
+                logging.info(f"Executing generated code ({len(code)} chars)")
+                exec(code, exec_globals, exec_locals)
+            finally:
+                # Restore stdout
+                sys.stdout = old_stdout
+            
+            # Get captured output
+            output_text = captured_output.getvalue().strip()
+            
+            # Try to get explicit result variable
+            explicit_result = exec_locals.get("result", None)
+            
+            # Determine what to return (prefer explicit result, fall back to captured output)
+            if explicit_result:
+                result = explicit_result
+            elif output_text:
+                result = output_text
+            else:
+                result = True
             
             return ExecutionResult(
                 success=True,
@@ -978,6 +999,10 @@ class FunctionExecutor:
                 function_name="generated_code"
             )
         except Exception as e:
+            # Make sure stdout is restored even on error
+            if 'old_stdout' in locals() and old_stdout:
+                sys.stdout = old_stdout
+            
             logging.error(f"Generated code execution error: {e}")
             logging.error(f"Code was:\n{code[:500]}...")
             return ExecutionResult(

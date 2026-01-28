@@ -13,6 +13,7 @@ from response_generator import get_response_generator
 from intent_router import get_intent_router, RouteResult
 from function_executor import get_function_executor
 from wake_word_detector import check_wake_word, extract_command_after_wake
+from capability_manager import capability_manager
 
 
 class AuraV2Bridge:
@@ -34,6 +35,7 @@ class AuraV2Bridge:
         self.response_gen = get_response_generator()
         self.intent_router = get_intent_router()
         self.executor = get_function_executor()
+        self.capability_mgr = capability_manager  # Track learned capabilities
         
         # Gemini client (lazy load)
         self._ai_client = None
@@ -49,9 +51,10 @@ class AuraV2Bridge:
             "gemini_full": 0,
             "gemini_chat": 0,
             "tokens_saved": 0,
+            "capabilities_learned": 0,  # New: track learned functions
         }
         
-        logging.info("AuraV2Bridge initialized with conversational butler mode")
+        logging.info("AuraV2Bridge initialized with conversational butler mode and capability learning")
     
     @property
     def ai_client(self):
@@ -137,6 +140,13 @@ class AuraV2Bridge:
             success=result.success
         )
         
+        # Track in capability manager for learning
+        self.capability_mgr.record_execution(
+            command=route_result.raw_command,
+            success=result.success,
+            function_name=route_result.function
+        )
+        
         # Generate response
         response = self.response_gen.confirmation(
             result=result.success,
@@ -170,8 +180,32 @@ class AuraV2Bridge:
                     success=result.success
                 )
                 
-                response = self.response_gen.confirmation(result.success)
-                return response, result.success, True
+                # Track execution in capability manager
+                self.capability_mgr.record_execution(
+                    command=command,
+                    success=result.success,
+                    function_name="generated_code"
+                )
+                
+                # If successful, save as new capability for future reuse
+                if result.success and self._is_reusable_function(code):
+                    try:
+                        self.capability_mgr.add_capability(code, command, success=True)
+                        self.stats["capabilities_learned"] += 1
+                        logging.info(f"Learned new capability from: {command}")
+                    except Exception as e:
+                        logging.warning(f"Could not save capability: {e}")
+                
+                # For conversational responses, return the actual result text
+                # For function executions, return a confirmation
+                if result.result and isinstance(result.result, str) and len(result.result) > 10:
+                    # AI generated a conversational response - return it!
+                    return result.result, result.success, True
+                else:
+                    # Function execution - return confirmation
+                    response = self.response_gen.confirmation(result.success)
+                    return response, result.success, True
+
             
             return self.response_gen.failure(), False, True
             
@@ -280,6 +314,11 @@ Respond as AURA, the helpful AI butler. Be informative, engaging, and conversati
     def get_greeting(self) -> str:
         """Get a time-appropriate greeting"""
         return self.response_gen.greeting()
+    
+    def _is_reusable_function(self, code: str) -> bool:
+        """Determine if code is a reusable function worth saving"""
+        # Only save if it contains a function definition
+        return "def " in code and code.count("def ") <= 2  # Avoid very complex code
     
     def get_stats(self) -> Dict[str, Any]:
         """Get performance statistics"""
