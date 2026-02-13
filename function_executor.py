@@ -333,23 +333,16 @@ class FunctionExecutor:
             def play_spotify():
                 import webbrowser
                 import urllib.parse
-                # Try to open Spotify app first
-                try:
-                    if query:
-                        # Open Spotify search
-                        subprocess.Popen("spotify", shell=True)
-                        # Also open web search as backup
-                        url = f"https://open.spotify.com/search/{urllib.parse.quote(query)}"
-                        webbrowser.open(url)
-                    else:
-                        subprocess.Popen("spotify", shell=True)
-                    print(f"Opening Spotify: {query if query else 'Home'}")
-                    return True
-                except:
-                    # Fallback to web
-                    url = f"https://open.spotify.com/search/{urllib.parse.quote(query)}" if query else "https://open.spotify.com"
-                    webbrowser.open(url)
-                    return True
+                # Open Spotify web player directly (more reliable than app)
+                if query:
+                    url = f"https://open.spotify.com/search/{urllib.parse.quote(query)}"
+                    print(f"Searching Spotify for: {query}")
+                else:
+                    # Open a popular playlist to start playing immediately
+                    url = "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"  # Today's Top Hits
+                    print("Opening Spotify Top Hits")
+                webbrowser.open(url)
+                return True
             
             return play_spotify, {}
         
@@ -433,6 +426,48 @@ class FunctionExecutor:
         # ═══════════════════════════════════════════════════════════════════════
         # MEDIA CONTROLS (keyboard simulation)
         # ═══════════════════════════════════════════════════════════════════════
+        if function_name == "play_media":
+            def play_media():
+                try:
+                    import ctypes
+                    # VK_MEDIA_PLAY_PAUSE = 0xB3
+                    ctypes.windll.user32.keybd_event(0xB3, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xB3, 0, 2, 0)
+                    print("Playing media")
+                    return True
+                except:
+                    return False
+            
+            return play_media, {}
+        
+        if function_name == "pause_media":
+            def pause_media():
+                try:
+                    import ctypes
+                    # VK_MEDIA_PLAY_PAUSE = 0xB3
+                    ctypes.windll.user32.keybd_event(0xB3, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xB3, 0, 2, 0)
+                    print("Pausing media")
+                    return True
+                except:
+                    return False
+            
+            return pause_media, {}
+        
+        if function_name == "stop_media":
+            def stop_media():
+                try:
+                    import ctypes
+                    # VK_MEDIA_STOP = 0xB2
+                    ctypes.windll.user32.keybd_event(0xB2, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xB2, 0, 2, 0)
+                    print("Stopping media")
+                    return True
+                except:
+                    return False
+            
+            return stop_media, {}
+        
         if function_name == "media_play_pause":
             def media_play_pause():
                 try:
@@ -446,6 +481,34 @@ class FunctionExecutor:
                     return False
             
             return media_play_pause, {}
+        
+        if function_name == "next_track":
+            def next_track():
+                try:
+                    import ctypes
+                    # VK_MEDIA_NEXT_TRACK = 0xB0
+                    ctypes.windll.user32.keybd_event(0xB0, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xB0, 0, 2, 0)
+                    print("Next track")
+                    return True
+                except:
+                    return False
+            
+            return next_track, {}
+        
+        if function_name == "previous_track":
+            def previous_track():
+                try:
+                    import ctypes
+                    # VK_MEDIA_PREV_TRACK = 0xB1
+                    ctypes.windll.user32.keybd_event(0xB1, 0, 0, 0)
+                    ctypes.windll.user32.keybd_event(0xB1, 0, 2, 0)
+                    print("Previous track")
+                    return True
+                except:
+                    return False
+            
+            return previous_track, {}
         
         if function_name == "media_next":
             def media_next():
@@ -716,6 +779,28 @@ class FunctionExecutor:
                     return False
             
             return draft_email_func, {}
+        
+        if function_name == "send_email":
+            to = args.get("to", "")
+            subject = args.get("subject", "")
+            body = args.get("body", "")
+            
+            def send_email_func():
+                try:
+                    from email_assistant import email_assistant
+                    success, message = email_assistant.send_via_smtp(to, subject, body)
+                    print(f"[Email] {message}")
+                    return success
+                except ImportError as e:
+                    logging.error(f"Email assistant not available: {e}")
+                    print("Email assistant module not found.")
+                    return False
+                except Exception as e:
+                    logging.error(f"Email send failed: {e}")
+                    print(f"Failed to send email: {e}")
+                    return False
+            
+            return send_email_func, {}
         
         # ═══════════════════════════════════════════════════════════════════════
         # POWERPOINT
