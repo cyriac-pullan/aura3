@@ -2,6 +2,9 @@
 AURA v2 - Widget Integration Bridge
 Integrates the new AURA v2 architecture with the existing floating widget.
 Drop-in replacement for the current processing pipeline.
+
+v2.2: Added goal-driven architecture with human-like keyboard/mouse execution.
+v2.3: Added multi-task handler for complex commands with dependencies.
 """
 
 import logging
@@ -14,6 +17,23 @@ from intent_router import get_intent_router, RouteResult
 from function_executor import get_function_executor
 from wake_word_detector import check_wake_word, extract_command_after_wake
 from capability_manager import capability_manager
+
+# Goal-driven architecture (v2.2)
+try:
+    from goal_router import get_goal_router
+    from goal import GoalType
+    GOAL_DRIVEN_ENABLED = True
+except ImportError as e:
+    logging.warning(f"Goal-driven architecture not available: {e}")
+    GOAL_DRIVEN_ENABLED = False
+
+# Multi-task handler (v2.3)
+try:
+    from multi_task_handler import get_multi_task_handler
+    MULTI_TASK_ENABLED = True
+except ImportError as e:
+    logging.warning(f"Multi-task handler not available: {e}")
+    MULTI_TASK_ENABLED = False
 
 
 class AuraV2Bridge:
@@ -37,6 +57,24 @@ class AuraV2Bridge:
         self.executor = get_function_executor()
         self.capability_mgr = capability_manager  # Track learned capabilities
         
+        # Goal-driven router (v2.2)
+        self._goal_router = None
+        if GOAL_DRIVEN_ENABLED:
+            try:
+                self._goal_router = get_goal_router()
+                logging.info("Goal-driven router enabled")
+            except Exception as e:
+                logging.warning(f"Could not initialize goal router: {e}")
+        
+        # Multi-task handler (v2.3)
+        self._multi_task_handler = None
+        if MULTI_TASK_ENABLED:
+            try:
+                self._multi_task_handler = get_multi_task_handler()
+                logging.info("Multi-task handler enabled")
+            except Exception as e:
+                logging.warning(f"Could not initialize multi-task handler: {e}")
+        
         # Gemini client (lazy load)
         self._ai_client = None
         
@@ -44,17 +82,22 @@ class AuraV2Bridge:
         self.conversation_history = []
         self.max_history = 20  # Keep last 20 exchanges
         
+        # Confirmation state for email
+        self.pending_confirmation = None  # {type: 'email', data: {...}}
+        
         # Stats
         self.stats = {
             "local_commands": 0,
+            "multi_task": 0,         # v2.3: Multi-task commands
+            "goal_driven": 0,        # v2.2: Human-like keyboard/mouse execution
             "gemini_intent": 0,
             "gemini_full": 0,
             "gemini_chat": 0,
             "tokens_saved": 0,
-            "capabilities_learned": 0,  # New: track learned functions
+            "capabilities_learned": 0,
         }
         
-        logging.info("AuraV2Bridge initialized with conversational butler mode and capability learning")
+        logging.info("AuraV2Bridge initialized with goal-driven architecture v2.3")
     
     @property
     def ai_client(self):
@@ -87,6 +130,27 @@ class AuraV2Bridge:
         logging.info(f"AuraV2Bridge processing: {command}")
         
         # ═══════════════════════════════════════════════════════════════
+        # STEP 0: Check Pending Confirmation
+        # ═══════════════════════════════════════════════════════════════
+        if self.pending_confirmation:
+            return self._handle_confirmation(command)
+        
+        # ═══════════════════════════════════════════════════════════════
+        # v2.3 MULTI-TASK HANDLER: Split complex commands with dependencies
+        # ═══════════════════════════════════════════════════════════════
+        if self._multi_task_handler and MULTI_TASK_ENABLED:
+            if self._multi_task_handler.is_multi_task(command):
+                logging.info(f"Detected multi-task command: {command}")
+                try:
+                    result, success, used_gemini = self._multi_task_handler.process(command)
+                    if result is not None:  # Multi-task handler handled it
+                        self.stats["multi_task"] += 1
+                        return result, success, used_gemini
+                except Exception as e:
+                    logging.warning(f"Multi-task handler error: {e}")
+                    # Fall through to normal processing
+        
+        # ═══════════════════════════════════════════════════════════════
         # STEP 1: Local Intent Classification (FREE)
         # ═══════════════════════════════════════════════════════════════
         route_result = self.intent_router.classify(command, self.context)
@@ -101,20 +165,64 @@ class AuraV2Bridge:
             return self._handle_conversation(command)
         
         # ═══════════════════════════════════════════════════════════════
-        # v2.1 UNIFIED ROUTING: Try local first, ALWAYS fallback to LLM
-        # This restores v1-like behavior where any command can work
+        # v2.1 FUNCTION EXECUTOR: Try Intent Router match FIRST
+        # If we have a high-confidence tool match, execute it immediately
         # ═══════════════════════════════════════════════════════════════
         
-        # If we have a function match (any confidence), try local first
-        if route_result.function and route_result.confidence >= 0.50:
+        # If we have a function match from Intent Router, try local first
+        if route_result.function and route_result.confidence >= 0.70:
             logging.info(f"Trying local execution: {route_result.function}")
+            
+            # Special interception for email drafting
+            if route_result.function == "draft_email":
+                return self._intercept_email_draft(route_result)
+                
             result = self._execute_local(route_result)
             if result[1]:  # success
                 self.stats["local_commands"] += 1
                 self.stats["tokens_saved"] += 500
                 return result
             else:
-                logging.info(f"Local execution failed, falling back to LLM")
+                logging.info(f"Local execution failed, trying goal router")
+        
+        # ═══════════════════════════════════════════════════════════════
+        # v2.2 GOAL-DRIVEN ROUTING (Human-like keyboard/mouse execution)
+        # For media, apps, web - uses strategies + keyboard/mouse
+        # ═══════════════════════════════════════════════════════════════
+        if self._goal_router and GOAL_DRIVEN_ENABLED:
+            try:
+                response, success = self._goal_router.route(command)
+                
+                # If goal router handled it successfully
+                if success:
+                    self.stats["goal_driven"] += 1
+                    self.stats["tokens_saved"] += 300  # Saved LLM call
+                    logging.info(f"Goal-driven: {response}")
+                    return response, True, False
+                
+                # Check if it needs fallback
+                if response == "NEEDS_FUNCTION_EXECUTOR":
+                    logging.info("Goal-driven: falling back to function executor")
+                    # Continue to function executor below
+                elif response == "NEEDS_CODE_GENERATION":
+                    logging.info("Goal-driven: falling back to code generation")
+                    self.stats["gemini_full"] += 1
+                    return self._handle_gemini(command, context)
+                    
+            except Exception as e:
+                logging.warning(f"Goal-driven routing error: {e}")
+                # Fall through to function executor
+        
+        # ═══════════════════════════════════════════════════════════════
+        # FALLBACK: Try lower-confidence function matches
+        # ═══════════════════════════════════════════════════════════════
+        if route_result.function and route_result.confidence >= 0.50:
+            logging.info(f"Trying lower-confidence execution: {route_result.function}")
+            result = self._execute_local(route_result)
+            if result[1]:  # success
+                self.stats["local_commands"] += 1
+                self.stats["tokens_saved"] += 500
+                return result
         
         # ═══════════════════════════════════════════════════════════════
         # FALLBACK: Use LLM to generate and execute code (v1 behavior)
@@ -123,6 +231,86 @@ class AuraV2Bridge:
         logging.info(f"Using LLM fallback for: {command}")
         self.stats["gemini_full"] += 1
         return self._handle_gemini(command, context)
+
+    def _intercept_email_draft(self, route_result: RouteResult) -> Tuple[str, bool, bool]:
+        """Intercept draft_email to ask for confirmation"""
+        try:
+            from email_assistant import email_assistant
+            
+            instruction = route_result.args.get("instruction", "")
+            recipient = route_result.args.get("recipient", "")
+            
+            success, msg, email_data = email_assistant.generate_draft(
+                instruction=instruction,
+                recipient=recipient
+            )
+            
+            if success:
+                # Store confirmation state
+                self.pending_confirmation = {
+                    "type": "email",
+                    "data": email_data
+                }
+                
+                # Create preview message
+                subject = email_data.get("subject", "")
+                body = email_data.get("body", "")
+                preview = body[:100] + "..." if len(body) > 100 else body
+                
+                response = (f"Draft ready:\n\n"
+                           f"Subject: {subject}\n"
+                           f"Body: {preview}\n\n"
+                           f"Say 'Send' to confirm or 'Cancel' to discard.")
+                return response, True, False
+            else:
+                return f"Failed to draft email: {msg}", False, False
+                
+        except Exception as e:
+            logging.error(f"Email intercept error: {e}")
+            return f"Error drafting email: {e}", False, False
+
+    def _handle_confirmation(self, command: str) -> Tuple[str, bool, bool]:
+        """Handle user response to confirmation request"""
+        import os
+        cmd_lower = command.lower()
+        affirmative = ["yes", "send", "confirm", "send it", "okay", "ok", "go ahead"]
+        negative = ["no", "cancel", "don't", "discard", "stop"]
+        
+        # Check affirmative
+        if any(w in cmd_lower for w in affirmative):
+            if self.pending_confirmation and self.pending_confirmation["type"] == "email":
+                try:
+                    from email_assistant import email_assistant
+                    email_data = self.pending_confirmation["data"]
+                    
+                    # Auto-detect SMTP config
+                    action = "clipboard"
+                    if os.environ.get("SMTP_EMAIL") and os.environ.get("SMTP_PASSWORD"):
+                        action = "smtp"
+                        logging.info("SMTP config detected - creating action=smtp")
+                    
+                    # Execute execution
+                    success, msg = email_assistant.execute_email_action(email_data, action)
+                    
+                    if not success and action == "smtp":
+                         # Fallback to clipboard if SMTP fails
+                         success, msg = email_assistant.execute_email_action(email_data, "clipboard")
+                         msg = "SMTP sending failed. Copied to clipboard instead. " + msg
+
+                    self.pending_confirmation = None # Clear state
+                    return msg, True, False
+                except Exception as e:
+                    self.pending_confirmation = None
+                    return f"Error executing action: {e}", False, False
+        
+        # Check negative
+        elif any(w in cmd_lower for w in negative):
+            self.pending_confirmation = None
+            return "Cancelled. Draft discarded.", True, False
+            
+        # Unclear response
+        else:
+            return "Please say 'Send' to confirm or 'Cancel' to discard.", False, False
     
     def _execute_local(self, route_result: RouteResult) -> Tuple[str, bool, bool]:
         """Execute command locally (0 tokens)"""
@@ -220,37 +408,42 @@ class AuraV2Bridge:
         if not self.ai_client:
             return "I apologize, but I'm experiencing connectivity difficulties at the moment, sir.", False, False
         
-        try:
-            # Add user message to history
-            self.conversation_history.append({"role": "user", "content": message})
-            
-            # Keep only recent history
-            if len(self.conversation_history) > self.max_history:
-                self.conversation_history = self.conversation_history[-self.max_history:]
-            
-            # Build conversation context
-            conversation_context = "\n".join([
-                f"{'User' if msg['role'] == 'user' else 'AURA'}: {msg['content']}"
-                for msg in self.conversation_history[-10:]  # Last 10 messages for context
-            ])
-            
-            # Detect user intent for response length
-            brief_keywords = ["briefly", "short", "quick", "tl;dr", "in a nutshell", "summarize", "one sentence", "keep it short"]
-            detailed_keywords = ["in detail", "detailed", "explain fully", "elaborate", "comprehensive", "thorough", "tell me everything"]
-            
-            wants_brief = any(kw in message.lower() for kw in brief_keywords)
-            wants_detailed = any(kw in message.lower() for kw in detailed_keywords)
-            
-            length_instruction = ""
-            if wants_brief:
-                length_instruction = "\n\nRESPONSE LENGTH: User wants a BRIEF answer. Keep it to 1-3 sentences maximum. Be concise."
-            elif wants_detailed:
-                length_instruction = "\n\nRESPONSE LENGTH: User wants a DETAILED answer. Provide comprehensive information with examples if relevant."
-            else:
-                length_instruction = "\n\nRESPONSE LENGTH: Provide a balanced response - informative but not overly long. 3-5 sentences for simple questions, more for complex topics."
-            
-            # Enhanced butler personality prompt
-            prompt = f"""You are AURA, an sophisticated AI butler assistant with these characteristics:
+        import time
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # Add user message to history
+                if attempt == 0:  # Only add on first attempt
+                    self.conversation_history.append({"role": "user", "content": message})
+                
+                # Keep only recent history
+                if len(self.conversation_history) > self.max_history:
+                    self.conversation_history = self.conversation_history[-self.max_history:]
+                
+                # Build conversation context
+                conversation_context = "\n".join([
+                    f"{'User' if msg['role'] == 'user' else 'AURA'}: {msg['content']}"
+                    for msg in self.conversation_history[-10:]  # Last 10 messages for context
+                ])
+                
+                # Detect user intent for response length
+                brief_keywords = ["briefly", "short", "quick", "tl;dr", "in a nutshell", "summarize", "one sentence", "keep it short"]
+                detailed_keywords = ["in detail", "detailed", "explain fully", "elaborate", "comprehensive", "thorough", "tell me everything"]
+                
+                wants_brief = any(kw in message.lower() for kw in brief_keywords)
+                wants_detailed = any(kw in message.lower() for kw in detailed_keywords)
+                
+                length_instruction = ""
+                if wants_brief:
+                    length_instruction = "\n\nRESPONSE LENGTH: User wants a BRIEF answer. Keep it to 1-3 sentences maximum. Be concise."
+                elif wants_detailed:
+                    length_instruction = "\n\nRESPONSE LENGTH: User wants a DETAILED answer. Provide comprehensive information with examples if relevant."
+                else:
+                    length_instruction = "\n\nRESPONSE LENGTH: Provide a balanced response - informative but not overly long. 3-5 sentences for simple questions, more for complex topics."
+                
+                # Enhanced butler personality prompt
+                prompt = f"""You are AURA, an sophisticated AI butler assistant with these characteristics:
 
 PERSONALITY:
 - Polite, refined, and attentive like a traditional British butler
@@ -276,36 +469,45 @@ Current user message: {message}
 
 Respond as AURA, the helpful AI butler. Be informative, engaging, and conversational. Remember what was discussed before."""
 
-            # Use the same google-genai client pattern as the main AI client.
-            # Note: current client API does not accept generation_config here,
-            # so we rely on the model's defaults for now.
-            response = self.ai_client.client.models.generate_content(
-                model=self.ai_client.model,
-                contents=prompt,
-            )
-            
-            response_text = response.text.strip()
-            
-            # Truncate very long responses for better UX (keep first 500 words)
-            words = response_text.split()
-            if len(words) > 500:
-                truncated = ' '.join(words[:500]) + "\n\n[Response truncated - full answer available in conversation history]"
-                logging.info(f"BUTLER RESPONSE (truncated from {len(words)} words): {truncated[:160]}...")
-            else:
-                logging.info(f"BUTLER RESPONSE: {response_text[:160]}{'...' if len(response_text) > 160 else ''}")
-            
-            # Store full response in history, but return truncated version for display
-            full_response = response_text
-            display_response = truncated if len(words) > 500 else response_text
-            
-            # Add assistant response to history (full version)
-            self.conversation_history.append({"role": "assistant", "content": full_response})
-            
-            return display_response, True, True
-            
-        except Exception as e:
-            logging.error(f"Conversation error: {e}")
-            return "I apologize, but I'm experiencing a momentary difficulty. Could you please repeat that?", False, True
+                # Use the same google-genai client pattern as the main AI client.
+                # Note: current client API does not accept generation_config here,
+                # so we rely on the model's defaults for now.
+                response = self.ai_client.client.models.generate_content(
+                    model=self.ai_client.model,
+                    contents=prompt,
+                )
+                
+                response_text = response.text.strip()
+                
+                # Truncate very long responses for better UX (keep first 500 words)
+                words = response_text.split()
+                if len(words) > 500:
+                    truncated = ' '.join(words[:500]) + "\n\n[Response truncated - full answer available in conversation history]"
+                    logging.info(f"BUTLER RESPONSE (truncated from {len(words)} words): {truncated[:160]}...")
+                else:
+                    logging.info(f"BUTLER RESPONSE: {response_text[:160]}{'...' if len(response_text) > 160 else ''}")
+                
+                # Store full response in history, but return truncated version for display
+                full_response = response_text
+                display_response = truncated if len(words) > 500 else response_text
+                
+                # Add assistant response to history (full version)
+                self.conversation_history.append({"role": "assistant", "content": full_response})
+                
+                return display_response, True, True
+                
+            except Exception as e:
+                error_str = str(e)
+                # Check if it's a rate limit error
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** (attempt + 1)  # 2, 4 seconds
+                        logging.warning(f"Rate limit hit, waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                        time.sleep(wait_time)
+                        continue
+                logging.error(f"Conversation error: {e}")
+                
+        return "I apologize, but I'm experiencing a momentary difficulty. Could you please repeat that?", False, True
     
     def get_acknowledgment(self) -> str:
         """Get a wake word acknowledgment"""

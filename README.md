@@ -35,38 +35,42 @@ A secure, modular AI assistant with a futuristic GUI that learns and adapts to n
 ### Prerequisites
 - Python 3.8 or higher
 - Windows 10/11 (for system control features)
-- OpenRouter API key (get one at [openrouter.ai](https://openrouter.ai/))
+- Google Gemini API key (get one at [aistudio.google.com](https://aistudio.google.com/app/apikey))
 
 ### Installation
 
 1. **Clone or download the project**
-2. **Run the setup script**:
-   ```bash
-   python setup.py
-   ```
-   This will:
-   - Install required dependencies
-   - Help you set up your API key
-   - Run tests to verify installation
-   - Create a desktop shortcut (optional)
 
-3. **Set your API key** (if not done during setup):
+2. **Install dependencies**:
    ```bash
-   # Windows
-   set OPENROUTER_API_KEY=your_key_here
-   
-   # Linux/Mac
-   export OPENROUTER_API_KEY=your_key_here
+   pip install -r requirements.txt
    ```
 
-4. **Start AURA**:
+3. **Set up your API key**:
    ```bash
-   # Launch AURA GUI directly
-   python aura_gui.py
-   
-   # Or use the batch file for full experience
-   start_aura.bat
+   # Create .env file in project root
+   copy .env.example .env
+   # Edit .env and add your Gemini API key:
+   # GEMINI_API_KEY=your_key_here
    ```
+
+4. **Start AURA Widget**:
+   ```bash
+   # Launch the floating widget
+   python aura_floating_widget/aura_widget.py
+   
+   # Or use the batch file (Windows)
+   aura_floating_widget\start_aura_widget.bat
+   ```
+
+### Alternative: Command Line Usage
+```bash
+# Test goal-driven architecture
+python test_goal_driven.py
+
+# Run feature simulation
+python test_e2e_simulation.py
+```
 
 ## 📖 Usage
 
@@ -113,16 +117,21 @@ Assistant: ✅ Task completed successfully!
 
 ## 🏗️ Architecture
 
-### Core Components
+### Core Components (v2 Goal-Driven Architecture)
 
-- **`assistant.py`** - Main application and coordination
+- **`aura_v2_bridge.py`** - Main integration bridge connecting widget to v2 architecture
+- **`goal_router.py`** - Extracts user goals using LLM and routes to strategies
+- **`strategy_planner.py`** - Plans how to achieve goals with human-like actions
+- **`plan_executor.py`** - Executes action plans using keyboard/mouse
+- **`intent_router.py`** - LLM-based intent classification for commands
+- **`context_engine.py`** - Persistent memory of user preferences
+- **`function_executor.py`** - Executes Windows system functions
+- **`ai_client.py`** - Google Gemini API client
 - **`config.py`** - Secure configuration management
-- **`ai_client.py`** - Modern OpenAI API client
-- **`code_executor.py`** - Safe code execution with validation
 - **`capability_manager.py`** - Dynamic capability management
-- **`self_improvement.py`** - Self-improvement engine
-- **`voice_interface.py`** - Voice and text interfaces
-- **`windows_system_utils.py`** - Windows system functions
+
+### Widget UI
+- **`aura_floating_widget/aura_widget.py`** - PyQt5 floating widget interface
 
 ### Data Storage
 

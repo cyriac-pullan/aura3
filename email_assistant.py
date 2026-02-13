@@ -16,6 +16,10 @@ import subprocess
 from pathlib import Path
 from typing import Tuple, Optional
 from urllib.parse import quote
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 
 class EmailAssistant:
@@ -69,18 +73,17 @@ class EmailAssistant:
         print(f"🎨 Tone: {tone}")
         print(f"{'='*50}\n")
         
-        prompt = f"""You are an expert email writer. Draft an email based on this request:
-
-REQUEST: {instruction}
-RECIPIENT: {recipient or 'Not specified'}
-TONE: {tone}
-
-        # Get user name from config
         try:
             from user_config import get_user_name
             user_name = get_user_name()
         except ImportError:
             user_name = "User"
+
+        prompt = f"""You are an expert email writer. Draft an email based on this request:
+
+REQUEST: {instruction}
+RECIPIENT: {recipient or 'Not specified'}
+TONE: {tone}
 
 IMPORTANT: Return ONLY a JSON object with these fields:
 {{
@@ -203,59 +206,112 @@ $mail.Display()
         return str(filepath)
 
 
+    def generate_draft(self, instruction: str, recipient: str = None, 
+                       tone: str = "professional") -> Tuple[bool, str, dict]:
+        """
+        Generate an email draft but do not perform any action yet.
+        Returns (success, message, email_data).
+        """
+        return self.draft_email(instruction, recipient, tone)
+
+    def send_via_smtp(self, to: str, subject: str, body: str) -> Tuple[bool, str]:
+        """
+        Send email via SMTP using environment variables.
+        Requires: SMTP_SERVER, SMTP_PORT, SMTP_EMAIL, SMTP_PASSWORD
+        """
+        import smtplib
+        import ssl
+        import os
+        
+        smtp_server = os.environ.get("SMTP_SERVER")
+        smtp_port = os.environ.get("SMTP_PORT")
+        sender_email = os.environ.get("SMTP_EMAIL")
+        password = os.environ.get("SMTP_PASSWORD")
+        
+        if not all([smtp_server, smtp_port, sender_email, password]):
+            return False, "SMTP configuration missing. Please check your .env file."
+            
+        try:
+            port = int(smtp_port)
+            context = ssl.create_default_context()
+            
+            message = f"Subject: {subject}\nTo: {to}\nFrom: {sender_email}\n\n{body}"
+            
+            with smtplib.SMTP(smtp_server, port) as server:
+                server.starttls(context=context)
+                server.login(sender_email, password)
+                server.sendmail(sender_email, to, message)
+                
+            print(f"📧 Sent email to {to} via {smtp_server}")
+            return True, f"Email sent successfully to {to}!"
+            
+        except Exception as e:
+            print(f"❌ SMTP Error: {e}")
+            return False, f"Failed to send email: {e}"
+
+    def execute_email_action(self, email_data: dict, action: str = "clipboard") -> Tuple[bool, str]:
+        """
+        Execute an action on an existing draft.
+        """
+        subject = email_data.get("subject", "")
+        body = email_data.get("body", "")
+        to = email_data.get("to", "")
+        
+        if action == "clipboard":
+            full_email = f"Subject: {subject}\n\n{body}"
+            if self.copy_to_clipboard(full_email):
+                return True, f"Email copied to clipboard! Subject: {subject}"
+            else:
+                return True, f"Email drafted but clipboard failed. Subject: {subject}"
+        
+        elif action == "smtp":
+            return self.send_via_smtp(to, subject, body)
+            
+        elif action == "open":
+            self.open_in_email_client(to, subject, body)
+            return True, f"Email opened in your default client!"
+        
+        elif action == "outlook":
+            self.open_outlook_draft(to, subject, body)
+            return True, f"Email opened in Outlook!"
+        
+        elif action == "save":
+            filepath = self.save_draft(subject, body, to)
+            return True, f"Email saved to {filepath}"
+        
+        else:
+            # Default: copy to clipboard
+            full_email = f"Subject: {subject}\n\n{body}"
+            self.copy_to_clipboard(full_email)
+            return True, f"Email drafted! Subject: {subject}"
+
+
 # Global instance
 email_assistant = EmailAssistant()
+
+
+def generate_draft(instruction: str, recipient: str = None, tone: str = "professional") -> Tuple[bool, str, dict]:
+    """Generate a draft (wrapper)."""
+    return email_assistant.generate_draft(instruction, recipient, tone)
+
+
+def execute_action(email_data: dict, action: str = "clipboard") -> Tuple[bool, str]:
+    """Execute action on draft (wrapper)."""
+    return email_assistant.execute_email_action(email_data, action)
 
 
 def draft_email(instruction: str, recipient: str = None, 
                 tone: str = "professional", 
                 action: str = "clipboard") -> Tuple[bool, str]:
     """
-    Draft an email and perform an action.
-    
-    Args:
-        instruction: What the email should say
-        recipient: Who it's for
-        tone: professional, casual, formal, friendly
-        action: clipboard, open, outlook, save
-        
-    Returns:
-        (success, message)
+    Draft an email and perform an action (Legacy/Direct wrapper).
     """
-    success, msg, email_data = email_assistant.draft_email(instruction, recipient, tone)
+    success, msg, email_data = email_assistant.generate_draft(instruction, recipient, tone)
     
     if not success:
         return False, msg
     
-    subject = email_data.get("subject", "")
-    body = email_data.get("body", "")
-    to = email_data.get("to", "")
-    
-    # Perform the requested action
-    if action == "clipboard":
-        full_email = f"Subject: {subject}\n\n{body}"
-        if email_assistant.copy_to_clipboard(full_email):
-            return True, f"Email drafted and copied to clipboard! Subject: {subject}"
-        else:
-            return True, f"Email drafted but clipboard failed. Subject: {subject}"
-    
-    elif action == "open":
-        email_assistant.open_in_email_client(to, subject, body)
-        return True, f"Email drafted and opened in your email client!"
-    
-    elif action == "outlook":
-        email_assistant.open_outlook_draft(to, subject, body)
-        return True, f"Email drafted and opened in Outlook!"
-    
-    elif action == "save":
-        filepath = email_assistant.save_draft(subject, body, to)
-        return True, f"Email saved to {filepath}"
-    
-    else:
-        # Default: copy to clipboard
-        full_email = f"Subject: {subject}\n\n{body}"
-        email_assistant.copy_to_clipboard(full_email)
-        return True, f"Email drafted! Subject: {subject}"
+    return email_assistant.execute_email_action(email_data, action)
 
 
 # Test

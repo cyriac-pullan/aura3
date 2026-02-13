@@ -6,25 +6,45 @@ from config import config
 from google import genai
 
 class AIClient:
-    """Google Gemini AI client using google-genai library"""
+    """Google Gemini AI client using google-genai library with API key rotation support"""
     
     def __init__(self):
-        self.api_key = config.api_key
-        self.model = "gemini-2.5-flash"  # Use the working model
+        self.model_name = "gemini-2.5-flash"  # Latest model with quota
         
-        # Initialize google-genai client
-        self.client = genai.Client(api_key=self.api_key)
-
-        # Debug API key
-        if self.api_key:
-            logging.info(f"API key found: {self.api_key[:10]}...{self.api_key[-4:]} (length: {len(self.api_key)})")
+        # Check if we have multiple API keys
+        api_keys = config.api_keys
+        
+        if len(api_keys) > 1:
+            # Use key pool for rotation
+            from api_key_pool import initialize_key_pool
+            self.key_pool = initialize_key_pool(api_keys)
+            self.client = genai.Client(api_key=self.key_pool.get_key())
+            logging.info(f"AI Client initialized with {len(api_keys)} API keys (rotation enabled)")
         else:
-            logging.error("No API key found")
+            # Single key mode
+            self.api_key = config.api_key
+            self.client = genai.Client(api_key=self.api_key)
+            self.key_pool = None
+            
+            # Debug API key
+            if self.api_key:
+                logging.info(f"API key found: {self.api_key[:10]}...{self.api_key[-4:]} (length: {len(self.api_key)})")
+            else:
+                logging.error("No API key found")
 
         if not config.validate_api_key():
             raise ValueError("Invalid or missing API key")
         
-        logging.info(f"AI Client initialized with model: {self.model} using google-genai library")
+        # Store model reference for easy access
+        self.model = self.model_name
+        
+        logging.info(f"AI Client initialized with model: {self.model_name} using google-genai SDK")
+    
+    def _get_client(self):
+        """Get a client, rotating keys if using key pool"""
+        if self.key_pool:
+            return self.key_pool.get_client()
+        return self.client
     
     def generate_code(self, command: str, context: Dict[str, Any] = None) -> str:
         """Generate Python code from natural language command with retry and fallback"""
@@ -42,7 +62,7 @@ class AIClient:
                 # Combine system prompt and user command for Gemini
                 full_prompt = f"{system_prompt}\n\nUser command: {command}"
                 
-                # Generate content using google-genai library
+                # Generate content using google-genai SDK
                 response = self.client.models.generate_content(
                     model=self.model,
                     contents=full_prompt
@@ -242,7 +262,7 @@ Respond ONLY with the complete function code, no explanations or markdown format
 """
         
         try:
-            # Generate content using google-genai library
+            # Generate content using google-genai SDK
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt
@@ -283,7 +303,7 @@ Respond ONLY with valid JSON, no explanations.
 """
         
         try:
-            # Generate content using google-genai library
+            # Generate content using google-genai SDK
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt

@@ -14,7 +14,7 @@ class CapabilityManager:
     def __init__(self):
         self.capabilities_file = Path(config.capabilities_file)
         self.learning_file = Path(config.learning_file)
-        self.utils_module_path = Path("agent/windows_system_utils.py")
+        self.utils_module_path = Path(__file__).parent / "windows_system_utils.py"
         
         # Load existing capabilities and learning data
         self.capabilities = self._load_capabilities()

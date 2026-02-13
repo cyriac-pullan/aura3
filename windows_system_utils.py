@@ -1266,7 +1266,7 @@ def get_system_capabilities() -> dict:
 
 
 def open_youtube_and_play_video(search_term: str) -> bool:
-    """Opens YouTube and automatically clicks and plays the first video from search results
+    """Opens YouTube and automatically plays the first video from search results
     
     Args:
         search_term: What to search for on YouTube
@@ -1274,151 +1274,55 @@ def open_youtube_and_play_video(search_term: str) -> bool:
     Returns:
         True if successful, False otherwise
     """
+    print(f"Opening YouTube for: {search_term}")
+    
     try:
         import webbrowser
-        import urllib.parse
         import time
-        import subprocess
+        import urllib.parse
         
-        # Determine if this is likely a music search or movie search
-        search_lower = search_term.lower()
-        
-        # Keywords that suggest it's a movie request
-        movie_keywords = ['movie', 'film', 'trailer', 'cinema', 'theater', 'theatre', 'release', 'plot', 'cast', 'director']
-        
-        # Keywords that suggest it's a music request
-        music_keywords = ['song', 'music', 'lyrics', 'album', 'artist', 'band', 'singer', 'official', 'audio', 'video']
-        
-        # Check if search term already contains movie indicators
-        is_movie_search = any(keyword in search_lower for keyword in movie_keywords)
-        is_music_search = any(keyword in search_lower for keyword in music_keywords)
-        
-        # If it's not explicitly a movie search and contains common music indicators, treat as music
-        if not is_movie_search and (is_music_search or len(search_term.split()) <= 3):
-            # Likely a music search - use the search term as-is
-            final_search_term = search_term
-            print(f"Opening YouTube and searching for music: {search_term}")
-        else:
-            # Default to adding "movie trailer" for movie searches
-            final_search_term = search_term + " movie trailer"
-            print(f"Opening YouTube and searching for movie: {search_term}")
-        
-        # Create search URL that goes directly to first result
-        query = urllib.parse.quote_plus(final_search_term)
-        
-        # Method 1: Try to use yt-dlp or youtube-dl if available for direct video playing
+        # Method 1: pywhatkit (Best for auto-play)
+        # playonyt handles the "search and play first video" logic very reliably
         try:
-            # Try using yt-dlp to get the first result and play it directly
-            yt_search_term = final_search_term if is_movie_search or "trailer" in final_search_term else final_search_term
-            result = subprocess.run([
-                "yt-dlp", "--get-title", "--get-url", "--no-playlist", "--ignore-errors",
-                f"ytsearch1:{yt_search_term}"
-            ], capture_output=True, text=True, timeout=15)
+            import pywhatkit
+            print("Using pywhatkit to play...")
+            # pywhatkit.playonyt opens the video url directly in the default browser
+            pywhatkit.playonyt(search_term)
+            return True
+        except ImportError:
+            print("pywhatkit not available available via import")
+        except Exception as e:
+            print(f"pywhatkit failed: {e}")
+
+        # Method 2: yt-dlp (Get direct URL)
+        # If pywhatkit fails, try to get the video ID ourselves
+        try:
+            import subprocess
+            print("Using yt-dlp to find URL...")
+            # ytsearch1:query gets the first result
+            # Use full path for yt-dlp if needed, but assuming it's in path
+            cmd = ["yt-dlp", "--get-id", "--no-playlist", "--ignore-errors", f"ytsearch1:{search_term}"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             
             if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                if len(lines) >= 2:
-                    title = lines[0]
-                    url = lines[1]
-                    print(f"Found video: {title}")
-                    print(f"Playing: {url}")
+                vid_id = result.stdout.strip()
+                if vid_id:
+                    url = f"https://www.youtube.com/watch?v={vid_id}"
+                    print(f"Found video ID: {vid_id}, opening {url}")
                     webbrowser.open(url)
                     return True
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass  # yt-dlp not available, continue with browser method
-        
-        # Method 2: Use browser automation with pyautogui if available
-        try:
-            import pyautogui
-            
-            # Open YouTube search in browser
-            youtube_url = f"https://www.youtube.com/results?search_query={query}"
-            webbrowser.open(youtube_url)
-            
-            # Wait for page to load
-            time.sleep(5)
-            
-            # Try to click on the first video thumbnail
-            # This is a simplified approach - you might need to adjust coordinates
-            # based on your screen resolution and browser window position
-            
-            # Get screen size
-            screen_width, screen_height = pyautogui.size()
-            
-            # Approximate position of first video thumbnail (adjust as needed)
-            # First video is usually in the top-left area after the page loads
-            click_x = screen_width // 4
-            click_y = screen_height // 3
-            
-            # Move mouse to first video and click
-            pyautogui.moveTo(click_x, click_y, duration=1)
-            time.sleep(1)
-            pyautogui.click()
-            
-            print("Attempted to click first video thumbnail")
-            
-            # Wait for video to start and attempt to skip first ad
-            time.sleep(3)
-            skip_youtube_ad()
-            
-            return True
-            
-        except ImportError:
-            # pyautogui not available, try selenium approach
-            pass
         except Exception as e:
-            print(f"Auto-click failed: {e}")
-        
-        # Method 3: Try selenium for better automation
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.common.keys import Keys
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
-            
-            # Set up Chrome driver (you may need to install ChromeDriver)
-            options = webdriver.ChromeOptions()
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            
-            driver = webdriver.Chrome(options=options)
-            
-            # Navigate to YouTube search
-            driver.get(f"https://www.youtube.com/results?search_query={query}")
-            
-            # Wait for page to load
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.ID, "contents"))
-            )
-            
-            # Find and click the first video thumbnail
-            first_video = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "#contents ytd-video-renderer:first-child #thumbnail"))
-            )
-            first_video.click()
-            
-            print("Successfully clicked first video using Selenium")
-            
-            # Wait for video to start and attempt to skip first ad
-            time.sleep(3)
-            skip_youtube_ad()
-            
-            return True
-            
-        except ImportError:
-            print("Selenium not available")
-        except Exception as e:
-            print(f"Selenium automation failed: {e}")
-        
-        # Method 4: Fallback to opening search results with better URL parameters
-        youtube_url = f"https://www.youtube.com/results?search_query={query}&sp=EgIYAQ%253D%253D"
-        webbrowser.open(youtube_url)
-        print("YouTube opened with search results - please click the first video manually")
+            print(f"yt-dlp failed: {e}")
+
+        # Method 3: Fallback to simple search
+        # If all else fails, just open the search results page
+        print("Fallback: Opening search results page")
+        query = urllib.parse.quote_plus(search_term)
+        webbrowser.open(f"https://www.youtube.com/results?search_query={query}")
         return True
-            
+        
     except Exception as e:
-        print(f"Error opening and playing YouTube video: {e}")
+        print(f"Error opening YouTube: {e}")
         return False
 
 
@@ -3476,3 +3380,44 @@ def list_available_functions() -> dict:
             }
 
     return functions
+
+
+# Auto-generated for: create text file in d drive named cyriac
+import os
+
+def create_text_file_in_d_drive(filename: str) -> bool:
+    """
+    Creates a text file with a specified name in the D drive with default content.
+
+    Args:
+        filename (str): The name of the file to create (e.g., "cyriac").
+
+    Returns:
+        bool: True if the file was created successfully, False otherwise.
+    """
+    if not filename.endswith(".txt"):
+        filename += ".txt"
+    file_path = os.path.join("D:\\", filename)
+    
+    # Use some default content, as the user didn't specify content
+    default_content = f"This is a text file named {filename} created by the AI assistant."
+
+    try:
+        # Check if the D drive exists
+        if not os.path.exists("D:\\"):
+            print(f"Error: D drive not found. Please ensure the D drive exists.")
+            return False
+            
+        success = write_text_to_file(file_path, default_content)
+        if success:
+            print(f"Successfully created file: {file_path}")
+            return True
+        else:
+            print(f"Failed to create file: {file_path}")
+            return False
+    except Exception as e:
+        print(f"An error occurred while trying to create the file {file_path}: {e}")
+        return False
+
+# Call the function with the extracted filename
+create_text_file_in_d_drive("cyriac")

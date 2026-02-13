@@ -174,22 +174,33 @@ class Config:
         """Get API key from environment variable"""
         return os.getenv('GEMINI_API_KEY') or os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY')
     
+    @property
+    def api_keys(self) -> list:
+        """Get list of API keys (supports comma-separated keys for rotation)"""
+        key_str = self.api_key
+        if not key_str:
+            return []
+        
+        # Split by comma and strip whitespace
+        keys = [k.strip() for k in key_str.split(',') if k.strip()]
+        return keys
+    
     def validate_api_key(self) -> bool:
         """Validate that API key is available"""
-        key = self.api_key
-        if not key:
+        keys = self.api_keys
+        if not keys:
             logging.error("No API key found. Please set GEMINI_API_KEY environment variable.")
             print("❌ ERROR: No API key found.")
             print("   Please set GEMINI_API_KEY in your .env file")
             print("   Get your key from: https://aistudio.google.com/app/apikey")
             return False
-        if len(key) < 20:  # Basic validation
+        if len(keys[0]) < 20:  # Basic validation
             logging.error("API key appears to be invalid (too short).")
             print("❌ ERROR: API key appears to be invalid (too short).")
             print("   Please check your GEMINI_API_KEY in .env file")
             return False
         # Check if key starts with expected prefix for Gemini
-        if not key.startswith('AIza'):
+        if not keys[0].startswith('AIza'):
             logging.warning("API key format may be incorrect (expected 'AIza' prefix for Gemini API key)")
         return True
 
