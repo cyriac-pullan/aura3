@@ -63,4 +63,7 @@ package-lock.json
 
 # WhatsApp local session
 .wwebjs_auth/
+# WhatsApp cache
+.wwebjs_cache/
+whatsapp_service/.wwebjs_cache/
 
