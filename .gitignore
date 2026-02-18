@@ -53,3 +53,14 @@ logs/
 *.temp
 ~$*
 .env
+
+# WhatsApp session files
+whatsapp_service/.wwebjs_auth/
+# Node
+node_modules/
+whatsapp_service/node_modules/
+package-lock.json
+
+# WhatsApp local session
+.wwebjs_auth/
+

@@ -34,6 +34,7 @@ GOAL TYPES:
 - CONTROL_MEDIA: Pause, play, next, previous, stop, mute
 - CHECK_EMAIL: Open/check email
 - SEND_EMAIL: Compose/send email
+- SEND_MESSAGE: Send WhatsApp, SMS, or other messages
 - OPEN_APP: Open/launch an application
 - CLOSE_APP: Close/exit an application
 - SYSTEM_CONTROL: Volume, brightness, settings

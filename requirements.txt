@@ -19,3 +19,6 @@ PyQt5>=5.15.0              # Widget UI
 # vosk>=0.3.45             # Offline speech recognition
 # openwakeword>=0.5.0      # Offline wake word detection
 # pyaudio>=0.2.14          # Audio input
+
+# Telegram Remote Control
+python-telegram-bot>=21.0

@@ -729,6 +729,45 @@ class FunctionExecutor:
             return create_file, {}
         
         # ═══════════════════════════════════════════════════════════════════════
+        # BROWSER AUTOMATION (AI-driven via browser-use)
+        # ═══════════════════════════════════════════════════════════════════════
+        if function_name == "browser_task":
+            task_desc = args.get("task", "")
+            url = args.get("url", "")
+            
+            def do_browser_task():
+                try:
+                    from browser_agent import run_browser_task, is_available
+                    if not is_available():
+                        print("Browser automation not available. Install: pip install browser-use playwright")
+                        return False
+                    
+                    try:
+                        print(f"Starting browser task: {task_desc[:80]}...")
+                    except:
+                        pass
+                        
+                    result = run_browser_task(task_desc, url=url if url else None)
+                    
+                    try:
+                        # Safe print for Windows console
+                        safe_result = str(result).encode('ascii', 'replace').decode('ascii')
+                        print(f"Browser result: {safe_result[:300]}")
+                    except:
+                        print("Browser task finished (result contains unprintable chars)")
+                        
+                    return True
+                except ImportError:
+                    print("browser_agent module not found.")
+                    return False
+                except Exception as e:
+                    logging.error(f"Browser task error: {e}")
+                    print(f"Browser task failed: {e}")
+                    return False
+            
+            return do_browser_task, {}
+        
+        # ═══════════════════════════════════════════════════════════════════════
         # AGENTIC APP CREATOR - Autonomous code generation with error-fix loop
         # ═══════════════════════════════════════════════════════════════════════
         if function_name == "create_app":
@@ -808,6 +847,142 @@ class FunctionExecutor:
         if function_name == "create_powerpoint_presentation":
             func = getattr(self._windows_utils, "create_powerpoint_presentation", None)
             return func, {"topic": args.get("topic", "General")}
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # WHATSAPP AUTOMATION
+        # ═══════════════════════════════════════════════════════════════════════
+        if function_name == "send_whatsapp_message":
+            contact = args.get("contact", "")
+            message = args.get("message", "")
+            
+            def send_whatsapp_msg():
+                try:
+                    from whatsapp_manager import WhatsAppManager
+                    wm = WhatsAppManager()
+                    return wm.send_message(contact, message)
+                except Exception as e:
+                    logging.error(f"WhatsApp error: {e}")
+                    print(f"Failed to send WhatsApp message: {e}")
+                    return False
+            
+            return send_whatsapp_msg, {}
+            
+        if function_name == "send_whatsapp_file":
+            contact = args.get("contact", "")
+            filename = args.get("filename", "")
+            location = args.get("location", "Downloads")
+            caption = args.get("caption", "")
+            
+            def send_whatsapp_file_doc():
+                try:
+                    from whatsapp_manager import WhatsAppManager
+                    wm = WhatsAppManager()
+                    return wm.send_file(contact, filename, location, caption)
+                except Exception as e:
+                    logging.error(f"WhatsApp error: {e}")
+                    print(f"Failed to send WhatsApp file: {e}")
+                    return False
+            
+            return send_whatsapp_file_doc, {}
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # TELEGRAM BOT
+        # ═══════════════════════════════════════════════════════════════════════
+        if function_name == "start_telegram_bot":
+            def start_tg_bot():
+                try:
+                    from telegram_bot import start_telegram_bot
+                    success = start_telegram_bot()
+                    if success:
+                        print("Telegram bot started! You can now control AURA from Telegram.")
+                    else:
+                        print("Failed to start Telegram bot. Check your TELEGRAM_BOT_TOKEN in .env")
+                    return success
+                except ImportError:
+                    print("telegram_bot module not found.")
+                    return False
+                except Exception as e:
+                    logging.error(f"Telegram bot start error: {e}")
+                    print(f"Failed to start Telegram bot: {e}")
+                    return False
+            return start_tg_bot, {}
+        
+        if function_name == "stop_telegram_bot":
+            def stop_tg_bot():
+                try:
+                    from telegram_bot import stop_telegram_bot
+                    stop_telegram_bot()
+                    print("Telegram bot stopped.")
+                    return True
+                except Exception as e:
+                    logging.error(f"Telegram bot stop error: {e}")
+                    return False
+            return stop_tg_bot, {}
+        
+        if function_name == "send_telegram_message":
+            text = args.get("text", "")
+            
+            def send_tg_msg():
+                try:
+                    from telegram_bot import send_telegram_message
+                    success = send_telegram_message(text)
+                    if success:
+                        print(f"Telegram message sent: {text[:50]}...")
+                    else:
+                        print("Failed to send Telegram message.")
+                    return success
+                except ImportError:
+                    print("telegram_bot module not found.")
+                    return False
+                except Exception as e:
+                    logging.error(f"Telegram send error: {e}")
+                    print(f"Failed to send Telegram message: {e}")
+                    return False
+            return send_tg_msg, {}
+        
+        if function_name == "send_telegram_file":
+            file_path = args.get("file_path", "")
+            caption = args.get("caption", "")
+            
+            def send_tg_file():
+                try:
+                    from telegram_bot import send_telegram_file
+                    success = send_telegram_file(file_path, caption)
+                    if success:
+                        print(f"File sent via Telegram: {file_path}")
+                    else:
+                        print("Failed to send file via Telegram.")
+                    return success
+                except ImportError:
+                    print("telegram_bot module not found.")
+                    return False
+                except Exception as e:
+                    logging.error(f"Telegram file send error: {e}")
+                    print(f"Failed to send file via Telegram: {e}")
+                    return False
+            return send_tg_file, {}
+        
+        if function_name == "send_telegram_photo":
+            photo_path = args.get("photo_path", "")
+            caption = args.get("caption", "")
+            
+            def send_tg_photo():
+                try:
+                    from telegram_bot import send_telegram_photo
+                    success = send_telegram_photo(photo_path, caption)
+                    if success:
+                        print(f"Photo sent via Telegram: {photo_path}")
+                    else:
+                        print("Failed to send photo via Telegram.")
+                    return success
+                except ImportError:
+                    print("telegram_bot module not found.")
+                    return False
+                except Exception as e:
+                    logging.error(f"Telegram photo send error: {e}")
+                    print(f"Failed to send photo via Telegram: {e}")
+                    return False
+            return send_tg_photo, {}
         
         # ═══════════════════════════════════════════════════════════════════════
         # TIME/DATE (simple local functions)

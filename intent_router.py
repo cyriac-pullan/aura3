@@ -58,6 +58,10 @@ class IntentRouter:
         {"name": "play_youtube", "description": "Open YouTube and play/search for music or videos", "params": {"query": "str (search query, empty to just open)"}},
         {"name": "play_youtube_video_ultra_direct", "description": "Play a specific YouTube video directly", "params": {"query": "str"}},
         
+        # WhatsApp Automation
+        {"name": "send_whatsapp_message", "description": "Send a WhatsApp message to a contact", "params": {"contact": "str", "message": "str"}},
+        {"name": "send_whatsapp_file", "description": "Send a file/document via WhatsApp", "params": {"contact": "str", "filename": "str", "location": "str (optional, e.g. 'Downloads')", "caption": "str (optional)"}},
+
         # Spotify
         {"name": "play_spotify", "description": "Open Spotify and start playing music (opens web player with Top Hits if no query)", "params": {"query": "str (song/artist/playlist, optional)"}},
         
@@ -171,11 +175,19 @@ class IntentRouter:
         {"name": "stop_screen_recording", "description": "Stop screen recording", "params": {}},
         
         # Browser Control
+        {"name": "browser_task", "description": "Automate a complex browser task using AI (fill forms, extract info from websites, book tickets, interact with web pages, scrape data, do multi-step web workflows)", "params": {"task": "str (what to do in the browser)", "url": "str (optional starting URL)"}},
         {"name": "browser_new_tab", "description": "Open new browser tab", "params": {}},
         {"name": "browser_close_tab", "description": "Close current browser tab", "params": {}},
         {"name": "browser_refresh", "description": "Refresh/reload page", "params": {}},
         {"name": "browser_back", "description": "Go back in browser", "params": {}},
         {"name": "browser_forward", "description": "Go forward in browser", "params": {}},
+        
+        # Telegram Bot
+        {"name": "start_telegram_bot", "description": "Start the Telegram bot for remote control", "params": {}},
+        {"name": "stop_telegram_bot", "description": "Stop the Telegram bot", "params": {}},
+        {"name": "send_telegram_message", "description": "Send a message to the user via Telegram", "params": {"text": "str (message to send)"}},
+        {"name": "send_telegram_file", "description": "Send a file to the user via Telegram", "params": {"file_path": "str (path to file)", "caption": "str (optional)"}},
+        {"name": "send_telegram_photo", "description": "Send a photo/image via Telegram", "params": {"photo_path": "str (path to image)", "caption": "str (optional)"}},
         
         # Shortcuts
         {"name": "select_all", "description": "Select all (Ctrl+A)", "params": {}},
@@ -295,6 +307,10 @@ Examples:
 - "play despacito on youtube" -> {{"action": "TOOL", "tool_name": "play_youtube", "params": {{"query": "despacito"}}}}
 - "what is machine learning" -> {{"action": "CONVERSATION", "tool_name": null, "params": {{}}}}
 - "create a todo app with python" -> {{"action": "GENERATE_CODE", "tool_name": null, "params": {{}}}}
+- "go to github and find the most starred AI repo" -> {{"action": "TOOL", "tool_name": "browser_task", "params": {{"task": "find the most starred AI repo", "url": "https://github.com"}}}}
+- "fill out the contact form on example.com with fake data" -> {{"action": "TOOL", "tool_name": "browser_task", "params": {{"task": "fill out the contact form with fake data", "url": "https://example.com"}}}}
+
+IMPORTANT: Use "browser_task" when the user wants to interact with a website (read content, fill forms, click buttons, extract data, do multi-step web workflows). Use "open_website" or "google_search" only for simple navigation or search.
 
 JSON RESPONSE:"""
 

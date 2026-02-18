@@ -8,6 +8,7 @@ v2.3: Added multi-task handler for complex commands with dependencies.
 """
 
 import logging
+import re
 from typing import Optional, Dict, Any, Tuple
 
 # AURA v2 Components
@@ -34,6 +35,15 @@ try:
 except ImportError as e:
     logging.warning(f"Multi-task handler not available: {e}")
     MULTI_TASK_ENABLED = False
+
+# Telegram bot (v3.0 - Remote Control)
+TELEGRAM_ENABLED = False
+try:
+    from telegram_bot import is_available as telegram_is_available
+    if telegram_is_available():
+        TELEGRAM_ENABLED = True
+except ImportError:
+    pass
 
 
 class AuraV2Bridge:
@@ -97,6 +107,17 @@ class AuraV2Bridge:
             "capabilities_learned": 0,
         }
         
+        # Auto-start Telegram bot if configured (v3.0)
+        self._telegram = None
+        if TELEGRAM_ENABLED:
+            try:
+                from telegram_bot import get_telegram_manager
+                self._telegram = get_telegram_manager()
+                self._telegram.start()
+                logging.info("Telegram remote control enabled")
+            except Exception as e:
+                logging.warning(f"Could not start Telegram bot: {e}")
+        
         logging.info("AuraV2Bridge initialized with goal-driven architecture v2.3")
     
     @property
@@ -135,6 +156,14 @@ class AuraV2Bridge:
         if self.pending_confirmation:
             return self._handle_confirmation(command)
         
+        # ═══════════════════════════════════════════════════════════════
+        # STEP 0.5: Regex Fast Path (Bypass LLM for common commands)
+        # Proven to save tokens and work when API is rate-limited (429)
+        # ═══════════════════════════════════════════════════════════════
+        fast_result = self._check_regex_shortcuts(command)
+        if fast_result:
+            return fast_result
+
         # ═══════════════════════════════════════════════════════════════
         # v2.3 MULTI-TASK HANDLER: Split complex commands with dependencies
         # ═══════════════════════════════════════════════════════════════
@@ -522,6 +551,114 @@ Respond as AURA, the helpful AI butler. Be informative, engaging, and conversati
         # Only save if it contains a function definition
         return "def " in code and code.count("def ") <= 2  # Avoid very complex code
     
+    def _check_regex_shortcuts(self, command: str) -> Optional[Tuple[str, bool, bool]]:
+        """Check for regex shortcuts to bypass LLM (Fast Path)"""
+        cmd_lower = command.lower()
+        
+        # ═══════════════════════════════════════════════════════════════
+        # WHATSAPP MESSAGE
+        # "send whatsapp to alex saying hello"
+        # "message alex on whatsapp: hello"
+        # "send whatsapp message to alex hello"
+        # "whatsapp message to alex hello"
+        # ═══════════════════════════════════════════════════════════════
+        # Pattern 1: Explicit "saying" or ":" separator
+        p1 = r"(?:send|tell)\s+(?:a\s+)?(?:whatsapp\s+)?(?:message\s+)?(?:to\s+)?(?P<contact>\w+)\s+(?:on\s+whatsapp\s+)?(?:saying|that|:)\s+(?P<message>.+)"
+        
+        # Pattern 2: Implicit message at end (start with send/whatsapp)
+        # "send whatsapp message to alex hi" -> contact=alex, message=hi
+        # "whatsapp to alex hi" -> contact=alex, message=hi
+        p2 = r"(?:send\s+(?:a\s+)?)?whatsapp\s+(?:message\s+)?(?:to\s+)?(?P<contact>\w+)(?:\s+|:\s+)(?P<message>.+)"
+        
+        match = re.search(p1, cmd_lower) or re.search(p2, cmd_lower)
+        
+        if match and ("whatsapp" in cmd_lower or "message" in cmd_lower):
+            contact = match.group("contact").title() # Capitalize first letter
+            message = match.group("message").strip()
+            
+            logging.info(f"Regex matched WhatsApp Message: {contact} -> {message}")
+            
+            result = self.executor.execute(
+                function_name="send_whatsapp_message", 
+                args={"contact": contact, "message": message}
+            )
+            
+            if result.success:
+                return f"Sent WhatsApp to {contact}.", True, False
+            elif result.error:
+                return f"Failed to send WhatsApp message: {result.error}", False, False
+            else:
+                 return "Failed to send message.", False, False
+
+        # ═══════════════════════════════════════════════════════════════
+        # WHATSAPP FILE
+        # "send resume.pdf to alex on whatsapp"
+        # "send file resume to alex"
+        # ═══════════════════════════════════════════════════════════════
+        wa_file_pattern = r"send\s+(?:file\s+)?(?P<filename>[\w\.]+)\s+(?:to\s+)(?P<contact>\w+)"
+        match = re.search(wa_file_pattern, cmd_lower)
+        if match and ("whatsapp" in cmd_lower or "file" in cmd_lower):
+            contact = match.group("contact").title()
+            filename = match.group("filename")
+            
+            logging.info(f"Regex matched WhatsApp File: {filename} -> {contact}")
+            
+            result = self.executor.execute(
+                function_name="send_whatsapp_file",
+                args={"contact": contact, "filename": filename, "location": "Downloads"} # default
+            )
+            
+            if result.success:
+                return f"Sent file {filename} to {contact}.", True, False
+            elif result.error:
+                return f"Failed to send file: {result.error}", False, False
+            else:
+                return "Failed to send file.", False, False
+
+        # ═══════════════════════════════════════════════════════════════
+        # SYSTEM VOLUME
+        # "set volume to 50"
+        # "mute volume"
+        # ═══════════════════════════════════════════════════════════════
+        if "volume" in cmd_lower or "sound" in cmd_lower:
+            if "mute" in cmd_lower or "shut up" in cmd_lower:
+                result = self.executor.execute(function_name="mute_system_volume")
+                return "Muted.", True, False
+            elif "unmute" in cmd_lower:
+                result = self.executor.execute(function_name="unmute_system_volume")
+                return "Unmuted.", True, False
+            elif "set" in cmd_lower and "to" in cmd_lower:
+                # Extract number
+                nums = re.findall(r'\d+', cmd_lower)
+                if nums:
+                    level = int(nums[-1])
+                    result = self.executor.execute(
+                        function_name="set_system_volume", 
+                        args={"level": level}
+                    )
+                    return f"Volume set to {level}.", True, False
+        
+        # ═══════════════════════════════════════════════════════════════
+        # YOUTUBE
+        # "play [song] on youtube"
+        # ═══════════════════════════════════════════════════════════════
+        if "play" in cmd_lower and "youtube" in cmd_lower:
+             clean = cmd_lower.replace("play", "").replace("on youtube", "").replace("youtube", "").strip()
+             result = self.executor.execute(function_name="play_youtube", args={"query": clean})
+             return f"Playing {clean} on YouTube.", True, False
+
+        # ═══════════════════════════════════════════════════════════════
+        # BROWSER AGENT
+        # ═══════════════════════════════════════════════════════════════
+        if cmd_lower.startswith("browser") and "agent" in cmd_lower:
+            task = cmd_lower.replace("browser", "").replace("agent", "").strip()
+            # This might be blocking, but since we are in a thread (ProcessingThread), it's okay?
+            # Actually ProcessingThread handles this.
+            self.executor.execute(function_name="browser_task", args={"task": task})
+            return "Browser task executed.", True, False
+
+        return None
+
     def get_stats(self) -> Dict[str, Any]:
         """Get performance statistics"""
         total = sum([

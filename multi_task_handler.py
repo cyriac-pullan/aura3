@@ -89,6 +89,33 @@ class MultiTaskHandler:
         """Check if command contains multiple tasks"""
         command_lower = command.lower()
         
+        # Commands that involve browser interaction should NOT be split
+        # They are single browser_task operations
+        browser_indicators = [
+            'fill out', 'fill in', 'fill the form', 'extract', 'scrape',
+            'find the', 'find me', 'find out', 'look up', 'look for',
+            'book a', 'book the', 'sign up', 'log in', 'login',
+            'browse', 'navigate', 'interact with', 'click on',
+            'browser agent', 'use the browser', 'on the website',
+            'on github', 'on amazon', 'on linkedin', 'on twitter',
+            'tell me the', 'tell me how', 'tell me what',
+        ]
+        
+        # If the command looks like a web interaction task, don't split it
+        if any(indicator in command_lower for indicator in browser_indicators):
+            # Check if it's clearly a web task (mentions going to a site + doing something)
+            web_patterns = [
+                r'go to .+ and (find|search|fill|click|extract|tell|get|check|look|read|scrape)',
+                r'(visit|open|navigate to) .+ and (find|search|fill|click|extract|tell|get|check|look|read)',
+                r'(find|search|get|extract|check) .+ (on|from|at) .+\.(com|org|net|io|dev)',
+                r'use the browser',
+                r'browser agent',
+            ]
+            for pattern in web_patterns:
+                if re.search(pattern, command_lower):
+                    logging.info(f"Detected browser task, not splitting: {command[:60]}")
+                    return False
+        
         # Check for separators
         for pattern in self.SEPARATORS:
             if re.search(pattern, command_lower):
@@ -98,19 +125,64 @@ class MultiTaskHandler:
     
     def split_tasks(self, command: str) -> List[Task]:
         """
-        Split a multi-task command into individual tasks.
-        Understands dependencies based on keywords.
+        Split a multi-task command into individual tasks using LLM.
+        Understands dependencies based on context.
         """
         tasks = []
         
-        # Try to split using separators (in order of specificity)
+        # Try LLM-based splitting first for better accuracy
+        try:
+            from ai_client import ai_client
+            
+            prompt = f"""Break down this multi-task command into individual, independent tasks.
+
+USER COMMAND: "{command}"
+
+INSTRUCTIONS:
+1. Identify each distinct task/action the user wants to perform
+2. Each task should be a complete, standalone instruction
+3. Preserve context (e.g., "create folder X" and "create folder Y" are TWO tasks)
+4. Don't split compound objects (e.g., "folders X and Y" means create BOTH folders)
+5. Identify if tasks are sequential (one depends on another) or parallel
+
+Respond with valid JSON:
+{{
+  "tasks": [
+    {{"command": "task description", "depends_on_previous": true/false}}
+  ]
+}}
+
+Examples:
+- "create folders X and Y" → [{{"command": "create folder X", "depends_on_previous": false}}, {{"command": "create folder Y", "depends_on_previous": false}}]
+- "open chrome and search for weather" → [{{"command": "open chrome", "depends_on_previous": false}}, {{"command": "search for weather", "depends_on_previous": true}}]
+- "create folder X. Inside X, create file test.txt" → [{{"command": "create folder X", "depends_on_previous": false}}, {{"command": "create file test.txt inside folder X", "depends_on_previous": true}}]
+
+JSON RESPONSE:"""
+
+            result = ai_client.generate_json(prompt)
+            
+            if "tasks" in result and isinstance(result["tasks"], list):
+                for i, task_data in enumerate(result["tasks"]):
+                    task = Task(
+                        command=task_data.get("command", ""),
+                        index=i,
+                        depends_on=[i - 1] if i > 0 and task_data.get("depends_on_previous", False) else []
+                    )
+                    tasks.append(task)
+                
+                logging.info(f"LLM split into {len(tasks)} tasks: {[t.command for t in tasks]}")
+                return tasks
+        
+        except Exception as e:
+            logging.warning(f"LLM task splitting failed: {e}, falling back to regex")
+        
+        # Fallback to regex-based splitting
         parts = [command]
         original_command = command.lower()
         
         for pattern in self.SEPARATORS:
             new_parts = []
             for part in parts:
-                # Track what separator was used
                 splits = re.split(pattern, part, flags=re.IGNORECASE)
                 if len(splits) > 1:
                     new_parts.extend(splits)
@@ -122,7 +194,6 @@ class MultiTaskHandler:
         parts = [p.strip() for p in parts if p.strip()]
         
         # Determine dependencies
-        # Check if original command had dependency keywords
         has_sequential_keywords = any(kw in original_command for kw in self.DEPENDENCY_KEYWORDS)
         
         for i, part in enumerate(parts):
@@ -132,15 +203,12 @@ class MultiTaskHandler:
                 depends_on=[]
             )
             
-            # If command had "then" or similar, each task depends on previous
             if has_sequential_keywords and i > 0:
                 task.depends_on = [i - 1]
             
             # Special dependency detection
-            # "search X" usually depends on a browser/app being open
             part_lower = part.lower()
             if any(kw in part_lower for kw in ['search', 'type', 'click', 'find']):
-                # Look for a previous task that opens something
                 for j in range(i - 1, -1, -1):
                     prev = parts[j].lower()
                     if any(kw in prev for kw in ['open', 'launch', 'start']):
@@ -150,7 +218,7 @@ class MultiTaskHandler:
             
             tasks.append(task)
         
-        logging.info(f"Split into {len(tasks)} tasks: {[t.command for t in tasks]}")
+        logging.info(f"Regex split into {len(tasks)} tasks: {[t.command for t in tasks]}")
         return tasks
     
     def execute_tasks(self, tasks: List[Task]) -> Tuple[str, bool]:
