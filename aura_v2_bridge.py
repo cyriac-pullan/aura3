@@ -642,7 +642,11 @@ Respond as AURA, the helpful AI butler. Be informative, engaging, and conversati
         # YOUTUBE
         # "play [song] on youtube"
         # ═══════════════════════════════════════════════════════════════
-        if "play" in cmd_lower and "youtube" in cmd_lower:
+        # ═══════════════════════════════════════════════════════════════
+        # YOUTUBE
+        # "play [song] on youtube"
+        # ═══════════════════════════════════════════════════════════════
+        if cmd_lower.startswith("play") and "youtube" in cmd_lower:
              clean = cmd_lower.replace("play", "").replace("on youtube", "").replace("youtube", "").strip()
              result = self.executor.execute(function_name="play_youtube", args={"query": clean})
              return f"Playing {clean} on YouTube.", True, False

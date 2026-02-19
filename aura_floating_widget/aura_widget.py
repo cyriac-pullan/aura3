@@ -483,16 +483,15 @@ class ContinuousListeningThread(QThread):
         # Also check common misrecognitions of "Aura"
         # Including Hindi/regional misrecognitions
         misrecognitions = [
-            # Common English mishearings
-            "tora", "hora", "ora", "or a", "ura", "aora", 
-            "dora", "laura", "aura", "aurora", "euro",
-            "aira", "era", "ara", "oreo", "aura's",
+            # Common English mishearings - removed risky ones like "ora", "era", "ara"
+            "tora", "hora", "ura", "aora", 
+            "dora", "laura", "aura", "aurora",
+            "aira", "oreo", "aura's",
             # Hindi/Regional mishearings
-            "hamara", "howrah", "porus", "bhanwra", "bhawra",
-            "honour", "horror", "hora", "horra",
+            "hamara", "howrah", "bhanwra", "bhawra",
             # Other variations
             "arra", "awara", "awra", "aara", "ahura",
-            "for a", "flora", "cora", "nora"
+            "flora"
         ]
         for mis in misrecognitions:
             if mis in text_lower:
@@ -514,11 +513,11 @@ class ContinuousListeningThread(QThread):
         
         # Check misrecognitions (same list as _check_wake_word)
         misrecognitions = [
-            "tora", "hora", "ora", "or a", "ura", "aora", 
-            "dora", "laura", "aurora", "euro", "aira", "era", "ara",
-            "hamara", "howrah", "porus", "bhanwra", "bhawra",
-            "honour", "horror", "horra", "arra", "awara", "awra",
-            "for a", "flora", "cora", "nora"
+            "tora", "hora", "ura", "aora", 
+            "dora", "laura", "aurora", "aira",
+            "hamara", "howrah", "bhanwra", "bhawra",
+            "arra", "awara", "awra", 
+            "flora"
         ]
         for mis in misrecognitions:
             if mis in text_lower:
