@@ -77,18 +77,25 @@ class EmailAssistant:
         except ImportError:
             user_name = "User"
 
+        from datetime import datetime
+        current_date = datetime.now().strftime("%B %d, %Y")
+        
         prompt = f"""You are an expert email writer. Draft an email based on this request:
 
 REQUEST: {instruction}
 RECIPIENT: {recipient or 'Not specified'}
 TONE: {tone}
+CURRENT DATE: {current_date}
 
-IMPORTANT: Return ONLY a JSON object with these fields:
-{{
-    "subject": "Email subject line",
-    "body": "Full email body with proper greeting and signature. Sign off with '{user_name}' as the name.",
-    "to": "{recipient or ''}"
-}}
+IMPORTANT:
+1. Return ONLY a JSON object.
+2. Field "subject": A professional subject line.
+3. Field "body": Full email body. 
+   - Use the REAL CURRENT DATE ({current_date}) where appropriate.
+   - DO NOT USE PLACEHOLDERS like [Date], [Current Date], or [Your Name].
+   - Use '{user_name}' as the sender name.
+   - Use '{recipient or 'Recipient'}' as the greeting if a name is provided.
+4. Field "to": "{recipient or ''}"
 
 Do NOT include any markdown formatting or explanation. Return ONLY the JSON."""
 
@@ -226,8 +233,14 @@ $mail.Display()
         sender_email = os.environ.get("SMTP_EMAIL")
         password = os.environ.get("SMTP_PASSWORD")
         
-        if not all([smtp_server, smtp_port, sender_email, password]):
-            return False, "SMTP configuration missing. Please check your .env file."
+        missing = []
+        if not smtp_server: missing.append("SMTP_SERVER")
+        if not smtp_port: missing.append("SMTP_PORT")
+        if not sender_email: missing.append("SMTP_EMAIL")
+        if not password: missing.append("SMTP_PASSWORD")
+        
+        if missing:
+            return False, f"SMTP configuration missing: {', '.join(missing)}. Please check your .env file."
             
         try:
             port = int(smtp_port)
