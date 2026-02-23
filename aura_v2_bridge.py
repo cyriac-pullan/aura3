@@ -563,18 +563,34 @@ Respond as AURA, the helpful AI butler. Be informative, engaging, and conversati
         # "whatsapp message to alex hello"
         # ═══════════════════════════════════════════════════════════════
         # Pattern 1: Explicit "saying" or ":" separator
+        # "send whatsapp to alex saying hello"
         p1 = r"(?:send|tell)\s+(?:a\s+)?(?:whatsapp\s+)?(?:message\s+)?(?:to\s+)?(?P<contact>\w+)\s+(?:on\s+whatsapp\s+)?(?:saying|that|:)\s+(?P<message>.+)"
         
-        # Pattern 2: Implicit message at end (start with send/whatsapp)
-        # "send whatsapp message to alex hi" -> contact=alex, message=hi
-        # "whatsapp to alex hi" -> contact=alex, message=hi
-        p2 = r"(?:send\s+(?:a\s+)?)?whatsapp\s+(?:message\s+)?(?:to\s+)?(?P<contact>\w+)(?:\s+|:\s+)(?P<message>.+)"
+        # Pattern 2: Message followed by "to [contact]"
+        # "send whatsapp message hello to dinu"
+        # "whatsapp hello to dinu"
+        p2 = r"(?:send\s+(?:a\s+)?)?whatsapp\s+(?:message\s+)?(?P<message>.+?)\s+to\s+(?P<contact>\w+)"
+
+        # Pattern 3: Implicit message at end
+        # "send whatsapp message to alex hello"
+        # "whatsapp to alex hi"
+        p3 = r"(?:send\s+(?:a\s+)?)?whatsapp\s+(?:message\s+)?(?:to\s+)(?P<contact>\w+)(?:\s+|:\s+)(?P<message>.+)"
         
-        match = re.search(p1, cmd_lower) or re.search(p2, cmd_lower)
+        # Pattern 4: Very simple "whatsapp [contact] [message]"
+        p4 = r"^whatsapp\s+(?P<contact>\w+)\s+(?P<message>.+)"
+
+        match = (re.search(p1, cmd_lower) or 
+                 re.search(p2, cmd_lower) or 
+                 re.search(p3, cmd_lower) or 
+                 re.search(p4, cmd_lower))
         
         if match and ("whatsapp" in cmd_lower or "message" in cmd_lower):
-            contact = match.group("contact").title() # Capitalize first letter
+            contact = match.group("contact").strip().title()
             message = match.group("message").strip()
+            
+            # Additional check: If contact is exactly "Message", it's probably a regex mis-match
+            if contact.lower() == "message":
+                return None # Fall through to normal routing
             
             logging.info(f"Regex matched WhatsApp Message: {contact} -> {message}")
             

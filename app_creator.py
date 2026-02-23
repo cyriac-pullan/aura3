@@ -13,6 +13,8 @@ import traceback
 from pathlib import Path
 from typing import Tuple, Optional
 from datetime import datetime
+from google import genai
+from config import config
 
 # App output directory
 APPS_DIR = Path.home() / "Desktop" / "AURA_Apps"
@@ -34,21 +36,20 @@ class AgenticAppCreator:
     MAX_RETRIES = 3
     
     def __init__(self):
-        self._ai_client = None
-        
         # Ensure apps directory exists
         APPS_DIR.mkdir(exist_ok=True)
-    
-    @property
-    def ai_client(self):
-        """Lazy load AI client"""
-        if self._ai_client is None:
-            try:
-                from ai_client import ai_client
-                self._ai_client = ai_client
-            except ImportError as e:
-                print(f"[AppCreator] AI client not available: {e}")
-        return self._ai_client
+
+        # --- App Creator uses its own dedicated API key ---
+        # Set GEMINI_API_KEY_APPCREATOR in .env to isolate its quota.
+        appcreator_key = config.api_key_appcreator
+        if appcreator_key:
+            self._client = genai.Client(api_key=appcreator_key)
+            self._model = "gemini-2.5-flash"
+            print(f"[AppCreator] Client ready. Key: {appcreator_key[:10]}...{appcreator_key[-4:]} (GEMINI_API_KEY_APPCREATOR)")
+        else:
+            self._client = None
+            self._model = None
+            print("[AppCreator] ⚠️  No API key — set GEMINI_API_KEY_APPCREATOR or GEMINI_API_KEY in .env")
     
     def create_app(self, description: str, app_name: str = None) -> Tuple[bool, str, str]:
         """
@@ -61,8 +62,8 @@ class AgenticAppCreator:
         Returns:
             (success, message, file_path)
         """
-        if not self.ai_client:
-            return False, "AI client not available. Please check your API key.", ""
+        if not self._client:
+            return False, "AI client not available — check GEMINI_API_KEY_APPCREATOR in .env", ""
         
         # Generate app name from description if not provided
         if not app_name:
@@ -137,8 +138,8 @@ IMPORTANT: Return ONLY the Python code, no explanations or markdown.
 Start directly with 'import' and end with the mainloop or equivalent."""
 
         try:
-            response = self.ai_client.client.models.generate_content(
-                model=self.ai_client.model,
+            response = self._client.models.generate_content(
+                model=self._model,
                 contents=prompt,
             )
             code = response.text.strip()
@@ -175,8 +176,8 @@ INSTRUCTIONS:
 5. Start directly with 'import'"""
 
         try:
-            response = self.ai_client.client.models.generate_content(
-                model=self.ai_client.model,
+            response = self._client.models.generate_content(
+                model=self._model,
                 contents=prompt,
             )
             fixed_code = response.text.strip()

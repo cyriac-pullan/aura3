@@ -4,43 +4,26 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
 
-def load_env_file(env_path: Path = None):
-    """Load environment variables from .env file
-    
-    Priority:
-    1. User's home directory (~/.aura/.env) - preferred, always writable
-    2. Application directory (.env) - for development
-    """
-    paths_to_try = []
-    
-    if env_path:
-        paths_to_try.append(env_path)
-    else:
-        # Try user home directory first (always writable)
-        user_env = Path.home() / ".aura" / ".env"
-        paths_to_try.append(user_env)
-        
-        # Fall back to script directory (for development)
-        script_env = Path(__file__).parent / ".env"
-        paths_to_try.append(script_env)
-    
-    for env_path in paths_to_try:
-        if env_path.exists():
-            try:
-                with open(env_path, 'r') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith('#') and '=' in line:
-                            key, value = line.split('=', 1)
-                            key = key.strip()
-                            value = value.strip().strip('"').strip("'")
-                            os.environ[key] = value
-                print(f"✅ Loaded environment variables from {env_path}")
-                return
-            except Exception as e:
-                print(f"⚠️ Error loading .env file: {e}")
-    
-    print("ℹ️ No .env file found")
+def load_env_file():
+    """Load environment variables from the root .env file (same folder as config.py)."""
+    env_path = Path(__file__).parent / ".env"
+
+    if not env_path.exists():
+        print(f"ℹ️ No .env file found at {env_path}")
+        return
+
+    try:
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    os.environ[key] = value
+        print(f"✅ Loaded environment variables from {env_path}")
+    except Exception as e:
+        print(f"⚠️ Error loading .env file: {e}")
 
 # Load .env file when module is imported
 load_env_file()
@@ -171,16 +154,62 @@ class Config:
     
     @property
     def api_key(self) -> Optional[str]:
-        """Get API key from environment variable"""
+        """Get the default/fallback API key from environment variable"""
         return os.getenv('GEMINI_API_KEY') or os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY')
-    
+
+    # ------------------------------------------------------------------
+    # Per-process API keys
+    # Each falls back to the shared GEMINI_API_KEY if not explicitly set.
+    # ------------------------------------------------------------------
+
+    @property
+    def api_key_intent(self) -> Optional[str]:
+        """Key used by the Intent Router (LLM classification).
+        Set GEMINI_API_KEY_INTENT in .env to override."""
+        return os.getenv('GEMINI_API_KEY_INTENT') or self.api_key
+
+    @property
+    def api_key_codegen(self) -> Optional[str]:
+        """Key used by the Code Generator (ai_client.py).
+        Set GEMINI_API_KEY_CODEGEN in .env to override."""
+        return os.getenv('GEMINI_API_KEY_CODEGEN') or self.api_key
+
+    @property
+    def api_key_browser(self) -> Optional[str]:
+        """Key used by the Browser Agent (browser_agent.py).
+        Set GEMINI_API_KEY_BROWSER in .env to override."""
+        return os.getenv('GEMINI_API_KEY_BROWSER') or self.api_key
+
+    @property
+    def api_key_email(self) -> Optional[str]:
+        """Key used by the Email Assistant (email_assistant.py).
+        Set GEMINI_API_KEY_EMAIL in .env to override."""
+        return os.getenv('GEMINI_API_KEY_EMAIL') or self.api_key
+
+    @property
+    def api_key_appcreator(self) -> Optional[str]:
+        """Key used by the Agentic App Creator (app_creator.py).
+        Set GEMINI_API_KEY_APPCREATOR in .env to override."""
+        return os.getenv('GEMINI_API_KEY_APPCREATOR') or self.api_key
+
+    @property
+    def default_files_dir(self) -> str:
+        """Default directory for all file/document creation.
+        Set DEFAULT_FILES_DIR in .env to override.
+        Directory is auto-created if it doesn't exist."""
+        path = os.getenv('DEFAULT_FILES_DIR', r'C:\Users\cyria\OneDrive\Desktop\aura')
+        # Ensure it exists so the LLM-generated code never hits a missing-dir error
+        import pathlib
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+        return path
+
     @property
     def api_keys(self) -> list:
-        """Get list of API keys (supports comma-separated keys for rotation)"""
+        """Get list of API keys for the default pool (supports comma-separated keys for rotation)"""
         key_str = self.api_key
         if not key_str:
             return []
-        
+
         # Split by comma and strip whitespace
         keys = [k.strip() for k in key_str.split(',') if k.strip()]
         return keys

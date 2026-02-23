@@ -322,7 +322,10 @@ class TelegramManager:
         logger.info(f"Telegram command received: {user_text}")
         
         # Send "typing" indicator while processing
-        await update.message.chat.send_action("typing")
+        try:
+            await update.message.chat.send_action("typing")
+        except Exception as e:
+            logger.debug(f"Failed to send typing action: {e}")
         
         # Process through AURA bridge
         bridge = self._get_bridge()
@@ -398,10 +401,35 @@ class TelegramManager:
             return
         
         caption = update.message.caption or ""
-        await update.message.reply_text(
-            f"📸 Photo received! Caption: '{caption}'\n"
-            "Photo analysis coming soon (Gemini Vision integration)."
-        )
+        
+        try:
+            # Send "typing" indicator
+            await update.message.chat.send_action("typing")
+            
+            # Get the highest resolution photo
+            photo = update.message.photo[-1]
+            photo_file = await photo.get_file()
+            
+            # Download to memory
+            image_bytes = await photo_file.download_as_bytearray()
+            
+            # Process with Gemini Vision
+            from ai_client import ai_client
+            
+            prompt = caption if caption else "Describe this image and identify what is in it."
+            logger.info(f"Analyzing photo from Telegram with prompt: {prompt}")
+            
+            # Run vision analysis
+            analysis = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: ai_client.analyze_image(bytes(image_bytes), prompt)
+            )
+            
+            # Send response
+            await update.message.reply_text(f"📸 *AURA Vision*\n\n{analysis}", parse_mode="Markdown")
+            
+        except Exception as e:
+            logger.error(f"Error processing photo: {e}")
+            await update.message.reply_text(f"❌ Failed to analyze photo: {e}")
     
     async def _handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming documents/files."""

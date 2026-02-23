@@ -279,7 +279,7 @@ class FunctionExecutor:
             "empty_recycle_bin",
             "hide_desktop_icons",
             "show_desktop_icons",
-            "create_ai_news_file",
+            # create_ai_news_file removed — goes to code generator now
         ]
         
         if function_name in direct_functions:
@@ -660,74 +660,10 @@ class FunctionExecutor:
             
             return calculate, {}
         
-        # ═══════════════════════════════════════════════════════════════════════
-        # FILE OPERATIONS
-        # ═══════════════════════════════════════════════════════════════════════
-        if function_name == "create_folder":
-            import os
-            folder_name = args.get("folder_name", "New Folder")
-            
-            def create_folder():
-                try:
-                    # Default to Desktop if no path specified
-                    if not os.path.isabs(folder_name):
-                        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
-                        folder_path = os.path.join(desktop, folder_name)
-                    else:
-                        folder_path = folder_name
-                    
-                    os.makedirs(folder_path, exist_ok=True)
-                    print(f"Created folder: {folder_path}")
-                    return os.path.exists(folder_path)
-                except Exception as e:
-                    logging.error(f"Failed to create folder: {e}")
-                    return False
-            
-            return create_folder, {}
-        
-        if function_name == "create_file":
-            import os
-            file_name = args.get("file_name", "new_file.txt")
-            content = args.get("content", "")
-            location = args.get("location", "")
-            
-            def create_file():
-                try:
-                    # Determine the file path
-                    if location:
-                        # Handle drive letters like "D:" or "D drive"
-                        loc = location.lower().replace(" drive", "").replace("drive ", "").strip()
-                        if len(loc) == 1 and loc.isalpha():
-                            base_path = f"{loc.upper()}:\\"
-                        elif loc.endswith(":"):
-                            base_path = loc.upper() + "\\"
-                        else:
-                            base_path = location
-                    else:
-                        # Default to Desktop
-                        base_path = os.path.join(os.path.expanduser("~"), "Desktop")
-                    
-                    # Ensure file has extension
-                    if not "." in file_name:
-                        file_name_with_ext = file_name + ".txt"
-                    else:
-                        file_name_with_ext = file_name
-                    
-                    file_path = os.path.join(base_path, file_name_with_ext)
-                    
-                    # Create the file
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    
-                    print(f"Created file: {file_path}")
-                    return True
-                except Exception as e:
-                    logging.error(f"Failed to create file: {e}")
-                    print(f"Error creating file: {e}")
-                    return False
-            
-            return create_file, {}
-        
+        # NOTE: create_folder, create_file — removed from executor.
+        # All file/folder/document creation goes to GENERATE_CODE (code generator).
+        # This allows the LLM to handle any complexity: rich content, Excel, PDFs, etc.
+
         # ═══════════════════════════════════════════════════════════════════════
         # BROWSER AUTOMATION (AI-driven via browser-use)
         # ═══════════════════════════════════════════════════════════════════════
@@ -842,20 +778,13 @@ class FunctionExecutor:
             return send_email_func, {}
         
         # ═══════════════════════════════════════════════════════════════════════
-        # POWERPOINT
-        # ═══════════════════════════════════════════════════════════════════════
-        if function_name == "create_powerpoint_presentation":
-            func = getattr(self._windows_utils, "create_powerpoint_presentation", None)
-            return func, {"topic": args.get("topic", "General")}
-
-        # ═══════════════════════════════════════════════════════════════════════
         # WHATSAPP AUTOMATION
         # ═══════════════════════════════════════════════════════════════════════
         if function_name == "send_whatsapp_message":
             contact = args.get("contact", "")
             message = args.get("message", "")
             
-            def send_whatsapp_msg():
+            def send_whatsapp_msg(contact=contact, message=message):
                 try:
                     from whatsapp_manager import WhatsAppManager
                     wm = WhatsAppManager()
@@ -865,7 +794,8 @@ class FunctionExecutor:
                     print(f"Failed to send WhatsApp message: {e}")
                     return False
             
-            return send_whatsapp_msg, {}
+            processed_args = {"contact": contact, "message": message}
+            return send_whatsapp_msg, processed_args
             
         if function_name == "send_whatsapp_file":
             contact = args.get("contact", "")
@@ -873,7 +803,7 @@ class FunctionExecutor:
             location = args.get("location", "Downloads")
             caption = args.get("caption", "")
             
-            def send_whatsapp_file_doc():
+            def send_whatsapp_file_doc(contact=contact, filename=filename, location=location, caption=caption):
                 try:
                     from whatsapp_manager import WhatsAppManager
                     wm = WhatsAppManager()
@@ -883,7 +813,13 @@ class FunctionExecutor:
                     print(f"Failed to send WhatsApp file: {e}")
                     return False
             
-            return send_whatsapp_file_doc, {}
+            processed_args = {
+                "contact": contact, 
+                "filename": filename, 
+                "location": location, 
+                "caption": caption
+            }
+            return send_whatsapp_file_doc, processed_args
         
         # ═══════════════════════════════════════════════════════════════════════
         # TELEGRAM BOT

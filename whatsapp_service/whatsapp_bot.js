@@ -51,20 +51,47 @@ app.post('/send-message', async (req, res) => {
     }
 
     const { contact, message } = req.body;
+    let attempts = 0;
+    const maxAttempts = 2;
 
-    try {
-        const chats = await client.getChats();
-        const targetChat = chats.find(c => c.name === contact || (c.id.user === contact));
+    while (attempts < maxAttempts) {
+        try {
+            console.log(`Attempting to send message to ${contact} (Attempt ${attempts + 1})`);
 
-        if (!targetChat) {
-            return res.status(404).json({ error: `Contact '${contact}' not found.` });
+            // Try to find the chat more efficiently or refresh chats list if it fails
+            const chats = await client.getChats();
+            const targetChat = chats.find(c =>
+                (c.name && c.name.toLowerCase() === contact.toLowerCase()) ||
+                (c.id.user === contact) ||
+                (c.id._serialized === contact)
+            );
+
+            if (!targetChat) {
+                // If not found in chats, try to see if it's a number we can format
+                if (/^\d+$/.test(contact)) {
+                    const formattedContact = contact.includes('@') ? contact : `${contact}@c.us`;
+                    await client.sendMessage(formattedContact, message);
+                    return res.json({ status: 'success', message: 'Message sent by ID!' });
+                }
+                return res.status(404).json({ error: `Contact '${contact}' not found.` });
+            }
+
+            await client.sendMessage(targetChat.id._serialized, message);
+            return res.json({ status: 'success', message: 'Message sent!' });
+
+        } catch (error) {
+            attempts++;
+            console.error(`Error sending message (attempt ${attempts}):`, error.message);
+
+            if (error.message.includes('detached Frame') || error.message.includes('Protocol error')) {
+                console.log('Detected Puppeteer frame error, retrying...');
+                // Wait a bit before retry
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+            }
+
+            return res.status(500).json({ error: error.message });
         }
-
-        await client.sendMessage(targetChat.id._serialized, message);
-        res.json({ status: 'success', message: 'Message sent!' });
-    } catch (error) {
-        console.error('Error sending message:', error);
-        res.status(500).json({ error: error.message });
     }
 });
 
@@ -75,26 +102,50 @@ app.post('/send-file', async (req, res) => {
     }
 
     const { contact, filePath, caption } = req.body;
+    let attempts = 0;
+    const maxAttempts = 2;
 
     if (!fs.existsSync(filePath)) {
         return res.status(400).json({ error: `File not found: ${filePath}` });
     }
 
-    try {
-        const chats = await client.getChats();
-        const targetChat = chats.find(c => c.name === contact || (c.id.user === contact));
+    while (attempts < maxAttempts) {
+        try {
+            console.log(`Attempting to send file to ${contact} (Attempt ${attempts + 1})`);
 
-        if (!targetChat) {
-            return res.status(404).json({ error: `Contact '${contact}' not found.` });
+            const chats = await client.getChats();
+            const targetChat = chats.find(c =>
+                (c.name && c.name.toLowerCase() === contact.toLowerCase()) ||
+                (c.id.user === contact) ||
+                (c.id._serialized === contact)
+            );
+
+            if (!targetChat) {
+                if (/^\d+$/.test(contact)) {
+                    const formattedContact = contact.includes('@') ? contact : `${contact}@c.us`;
+                    const media = MessageMedia.fromFilePath(filePath);
+                    await client.sendMessage(formattedContact, media, { caption: caption });
+                    return res.json({ status: 'success', message: 'File sent by ID!' });
+                }
+                return res.status(404).json({ error: `Contact '${contact}' not found.` });
+            }
+
+            const media = MessageMedia.fromFilePath(filePath);
+            await client.sendMessage(targetChat.id._serialized, media, { caption: caption });
+            return res.json({ status: 'success', message: 'File sent!' });
+
+        } catch (error) {
+            attempts++;
+            console.error(`Error sending file (attempt ${attempts}):`, error.message);
+
+            if (error.message.includes('detached Frame') || error.message.includes('Protocol error')) {
+                console.log('Detected Puppeteer frame error, retrying...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+            }
+
+            return res.status(500).json({ error: error.message });
         }
-
-        const media = MessageMedia.fromFilePath(filePath);
-        await client.sendMessage(targetChat.id._serialized, media, { caption: caption });
-
-        res.json({ status: 'success', message: 'File sent!' });
-    } catch (error) {
-        console.error('Error sending file:', error);
-        res.status(500).json({ error: error.message });
     }
 });
 

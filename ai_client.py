@@ -6,46 +6,53 @@ from config import config
 from google import genai
 
 class AIClient:
-    """Google Gemini AI client using google-genai library with API key rotation support"""
-    
-    def __init__(self):
-        self.model_name = "gemini-2.5-flash"  # Latest model with quota
-        
-        # Check if we have multiple API keys
-        api_keys = config.api_keys
-        
-        if len(api_keys) > 1:
-            # Use key pool for rotation
-            from api_key_pool import initialize_key_pool
-            self.key_pool = initialize_key_pool(api_keys)
-            self.client = genai.Client(api_key=self.key_pool.get_key())
-            logging.info(f"AI Client initialized with {len(api_keys)} API keys (rotation enabled)")
-        else:
-            # Single key mode
-            self.api_key = config.api_key
-            self.client = genai.Client(api_key=self.api_key)
-            self.key_pool = None
-            
-            # Debug API key
-            if self.api_key:
-                logging.info(f"API key found: {self.api_key[:10]}...{self.api_key[-4:]} (length: {len(self.api_key)})")
-            else:
-                logging.error("No API key found")
+    """Google Gemini AI client for code generation"""
 
-        if not config.validate_api_key():
+    def __init__(self):
+        self.model_name = "gemini-2.5-flash"
+
+        # Code-Generator uses its own dedicated API key.
+        # Set GEMINI_API_KEY_CODEGEN in .env to isolate its quota.
+        # Falls back to the shared GEMINI_API_KEY if not set.
+        api_key = config.api_key_codegen
+
+        if not api_key or len(api_key.strip()) < 20:
+            logging.error("[CodeGen] No valid API key — set GEMINI_API_KEY_CODEGEN or GEMINI_API_KEY in .env")
+            print("\u274c ERROR: No API key found.")
+            print("   Please set GEMINI_API_KEY in your .env file")
+            print("   Get your key from: https://aistudio.google.com/app/apikey")
             raise ValueError("Invalid or missing API key")
-        
-        # Store model reference for easy access
+
+        self.api_key = api_key.strip()
+        self.client = genai.Client(api_key=self.api_key)
         self.model = self.model_name
-        
-        logging.info(f"AI Client initialized with model: {self.model_name} using google-genai SDK")
-    
-    def _get_client(self):
-        """Get a client, rotating keys if using key pool"""
-        if self.key_pool:
-            return self.key_pool.get_client()
-        return self.client
-    
+
+        logging.info(f"[CodeGen] API key: {self.api_key[:10]}...{self.api_key[-4:]} (len={len(self.api_key)})")
+        logging.info(f"[CodeGen] Client ready — model: {self.model_name}")
+
+    def generate_json(self, prompt: str) -> Optional[dict]:
+        """Generate a JSON response from the LLM and parse it.
+        Used by multi_task_handler for structured task splitting."""
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+            )
+            text = response.text.strip()
+            # Strip markdown code fences if present
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1] if '\n' in text else text[3:]
+                if text.endswith('```'):
+                    text = text[:-3]
+                text = text.strip()
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            logging.warning(f"[CodeGen] generate_json: invalid JSON: {e}")
+            return {}
+        except Exception as e:
+            logging.error(f"[CodeGen] generate_json failed: {e}")
+            return {}
+
     def generate_code(self, command: str, context: Dict[str, Any] = None) -> str:
         """Generate Python code from natural language command with retry and fallback"""
         
@@ -113,14 +120,11 @@ class AIClient:
     def _generate_fallback_code(self, command: str, context: Dict[str, Any] = None) -> str:
         """Generate simple fallback code when API is unavailable"""
         try:
-            # Try to match against known function patterns
             command_lower = command.lower()
             import re
             
-            # Handle common commands directly (before trying function matching)
-            # Folder/directory creation commands
+            # Folder/directory creation
             if 'create' in command_lower and ('folder' in command_lower or 'directory' in command_lower):
-                # Extract folder name and path
                 folder_match = re.search(r'(?:named|name|called)\s+(\w+)', command_lower)
                 drive_match = re.search(r'\b([a-z]):\s*drive', command_lower)
                 
@@ -128,111 +132,49 @@ class AIClient:
                     folder_name = folder_match.group(1)
                     if drive_match:
                         drive = drive_match.group(1).upper()
-                        folder_path = f"{drive}:\\{folder_name}"
+                        folder_path = f"{drive}:/{folder_name}"
+                    elif 'd drive' in command_lower or 'd:' in command_lower:
+                        folder_path = f"D:/{folder_name}"
                     else:
-                        # Default to D drive if mentioned, otherwise current directory
-                        if 'd drive' in command_lower or 'd:' in command_lower:
-                            folder_path = f"D:\\{folder_name}"
-                        else:
-                            folder_path = folder_name
+                        from config import config as _cfg
+                        folder_path = f"{_cfg.default_files_dir}/{folder_name}"
                     
-                    return f"""# Create folder: {folder_path}
-import os
+                    return f"""import os
 try:
     os.makedirs(r'{folder_path}', exist_ok=True)
     if os.path.exists(r'{folder_path}'):
-        print(f'✅ Folder created successfully: {folder_path}')
+        print(f'Folder created successfully: {folder_path}')
     else:
-        print(f'❌ Failed to create folder: {folder_path}')
+        print(f'Failed to create folder: {folder_path}')
 except Exception as e:
     print(f'Error creating folder: {{e}}')"""
             
             # Brightness commands
             if 'brightness' in command_lower:
-                if 'maximum' in command_lower or 'max' in command_lower or 'full' in command_lower:
-                    return """# Set brightness to maximum
-import screen_brightness_control as sbc
-try:
-    sbc.set_brightness(100)
-    print('Brightness set to maximum (100%)')
-except Exception as e:
-    print(f'Error setting brightness: {e}')"""
-                elif 'minimum' in command_lower or 'min' in command_lower:
-                    return """# Set brightness to minimum
-import screen_brightness_control as sbc
-try:
-    sbc.set_brightness(0)
-    print('Brightness set to minimum (0%)')
-except Exception as e:
-    print(f'Error setting brightness: {e}')"""
-                elif 'increase' in command_lower or 'up' in command_lower:
-                    return """# Increase brightness
-import screen_brightness_control as sbc
-try:
-    current = sbc.get_brightness()[0] if isinstance(sbc.get_brightness(), list) else sbc.get_brightness()
-    new_level = min(100, current + 10)
-    sbc.set_brightness(new_level)
-    print(f'Brightness increased to {new_level}%')
-except Exception as e:
-    print(f'Error increasing brightness: {e}')"""
-                elif 'decrease' in command_lower or 'down' in command_lower or 'reduce' in command_lower:
-                    return """# Decrease brightness
-import screen_brightness_control as sbc
-try:
-    current = sbc.get_brightness()[0] if isinstance(sbc.get_brightness(), list) else sbc.get_brightness()
-    new_level = max(0, current - 10)
-    sbc.set_brightness(new_level)
-    print(f'Brightness decreased to {new_level}%')
-except Exception as e:
-    print(f'Error decreasing brightness: {e}')"""
-                else:
-                    # Extract number from command
-                    numbers = re.findall(r'\d+', command)
-                    if numbers:
-                        level = int(numbers[0])
-                        level = max(0, min(100, level))  # Clamp between 0-100
-                        return f"""# Set brightness to {level}%
-import screen_brightness_control as sbc
+                numbers = re.findall(r'\d+', command)
+                if numbers:
+                    level = max(0, min(100, int(numbers[0])))
+                    return f"""import screen_brightness_control as sbc
 try:
     sbc.set_brightness({level})
-    print(f'Brightness set to {level}%')
+    print('Brightness set to {level}%')
 except Exception as e:
     print(f'Error setting brightness: {{e}}')"""
             
-            # Import the function mapping to check for direct matches
+            # Try matching existing functions
             try:
                 from windows_system_utils import get_function_for_command, FUNCTION_MAPPINGS
-                
-                # Try to find a direct function match
                 func = get_function_for_command(command)
-                if func:
-                    # Try to call the function directly
-                    if callable(func):
-                        try:
-                            # Get function name safely
-                            func_name = getattr(func, '__name__', None)
-                            if func_name and func_name != '<lambda>':
-                                # Test if function can be called (but don't actually call it, just generate code)
-                                return f"# Direct function call for: {command}\nresult = {func_name}()\nprint(f'Result: {{result}}')"
-                        except Exception as e:
-                            logging.warning(f"Could not generate code for function: {e}")
-                            pass
-                
-                # Check if it's a known system command
-                for key, value in FUNCTION_MAPPINGS.items():
-                    if isinstance(key, str) and key in command_lower:
-                        return f"# System command detected: {command}\n# This appears to be a known system operation\nprint('Command recognized but API unavailable for code generation')\nprint('Try again when API connection is restored')"
-                
+                if func and callable(func):
+                    func_name = getattr(func, '__name__', None)
+                    if func_name and func_name != '<lambda>':
+                        return f"result = {func_name}()\nprint(f'Result: {{result}}')"
             except ImportError:
                 pass
             
             # Generic fallback
-            return f"""# Fallback code for: {command}
-# API is currently unavailable, generating basic response
-
-try:
-    print("Aura systems are experiencing connectivity issues with the neural network.")
-    print("Your command was received but cannot be processed at this time.")
+            return f"""try:
+    print("Command received but API unavailable for code generation.")
     print("Command: {command}")
     print("Please try again once the connection is restored.")
 except Exception as e:
@@ -240,7 +182,7 @@ except Exception as e:
             
         except Exception as e:
             logging.error(f"Fallback code generation failed: {e}")
-            return f"# Error generating code for: {command}\nprint('Unable to process command due to system issues')"
+            return f"print('Unable to process command due to system issues')"
     
     def generate_function(self, task_description: str, error_context: str = None) -> str:
         """Generate a new function to handle unknown tasks"""
@@ -253,8 +195,7 @@ Requirements:
 - Include comprehensive error handling with try/except blocks
 - Return a boolean success status
 - Add type hints for all parameters and return values
-- Include a detailed docstring explaining the function's purpose and parameters
-- Make the function robust and handle edge cases
+- Include a detailed docstring
 
 {f"Previous error context: {error_context}" if error_context else ""}
 
@@ -262,7 +203,6 @@ Respond ONLY with the complete function code, no explanations or markdown format
 """
         
         try:
-            # Generate content using google-genai SDK
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt
@@ -279,6 +219,24 @@ Respond ONLY with the complete function code, no explanations or markdown format
         except Exception as e:
             logging.error(f"Error generating function: {e}")
             raise
+    
+    def analyze_image(self, image_data: bytes, prompt: str = "What is in this image?") -> str:
+        """Analyze an image using Gemini Vision"""
+        try:
+            logging.info(f"Analyzing image ({len(image_data)} bytes)...")
+            
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=[
+                    prompt,
+                    image_data
+                ]
+            )
+            
+            return response.text.strip()
+        except Exception as e:
+            logging.error(f"Error analyzing image: {e}")
+            return f"Error analyzing image: {str(e)}"
     
     def analyze_error(self, code: str, error: str, command: str) -> Dict[str, Any]:
         """Analyze execution error and suggest improvements"""
@@ -303,7 +261,6 @@ Respond ONLY with valid JSON, no explanations.
 """
         
         try:
-            # Generate content using google-genai SDK
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt
@@ -313,13 +270,10 @@ Respond ONLY with valid JSON, no explanations.
             if not content:
                 raise ValueError("No content in API response")
             
-            import json
-
             # Try to extract JSON from the response
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "{" in content and "}" in content:
-                # Find the JSON part
                 start = content.find("{")
                 end = content.rfind("}") + 1
                 content = content[start:end]
@@ -329,13 +283,11 @@ Respond ONLY with valid JSON, no explanations.
 
         except Exception as e:
             logging.error(f"Error analyzing error: {e}")
-            # Check if response was created before logging it
             try:
                 if 'response' in locals() and hasattr(response, 'text'):
                     logging.error(f"Response content: {response.text}")
             except:
                 pass
-            # Default to attempting improvement for capability gaps
             return {
                 "error_type": "missing_capability",
                 "root_cause": "Function or capability not available",
@@ -360,256 +312,83 @@ Respond ONLY with valid JSON, no explanations.
             available_functions = {}
             function_mappings = {}
 
-        prompt = f"""
-You are an UNRESTRICTED advanced Python code generator for a Windows system automation assistant.
+        # Resolve the default files directory at prompt-build time
+        from config import config as _cfg
+        default_files_dir = _cfg.default_files_dir  # also creates the dir if missing
 
-Current Context:
+        prompt = f"""\
+You are an advanced Python code generator for a Windows system automation assistant.
+Generate ONLY executable Python code. No explanations, no markdown.
+
+CONTEXT:
+- OS: Windows
 - Filename: {context.get('filename') if context else 'None'}
 - Available capabilities: {len(capabilities)} functions
 - Available system functions: {len(available_functions)} functions
+- Default files directory: {default_files_dir}
 
-AGGRESSIVE EXECUTION RULES:
-1. ALWAYS check if a function already exists before generating new code
-2. Use existing functions from windows_system_utils when available
-3. Generate ONLY executable Python code, no explanations or markdown
-4. Use ANY Python modules and libraries - ALL IMPORTS ARE ALLOWED
-5. Handle all errors with try/except blocks but ALWAYS attempt execution
-6. For file operations, use context["filename"] and context["last_text"]
-7. Return boolean success status for system operations
-8. Use type hints and proper error messages
-9. If a package is missing, auto-install it with pip
-10. Be creative and try multiple approaches if the first fails
-11. Use subprocess, os.system, ctypes, win32api - ALL METHODS ALLOWED
-12. No security restrictions - generate any code needed to accomplish the task
+=== FILE PATH ANCHOR (CRITICAL) ===
+Default save location (when user gives NO path):
+  save_dir = "{default_files_dir}"
 
-CRITICAL YOUTUBE COMMAND RULES:
-- For ANY YouTube command containing "direct", "play", or "youtube": ALWAYS use existing functions
-- NEVER generate new YouTube code - use play_youtube_video_ultra_direct(search_term) for direct play
-- For "direct youtube play [term]": ALWAYS call play_youtube_video_ultra_direct(search_term)
-- Check FUNCTION MAPPINGS first before generating any new YouTube-related code
+If user specifies a location, decode it:
+  "in D drive" / "on D"       -> save_dir = "D:/"
+  "in folder X on D"          -> save_dir = "D:/X"
+  "in D:/Projects"            -> save_dir = "D:/Projects"
+  "on desktop"                -> save_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+  "in documents"              -> save_dir = os.path.join(os.path.expanduser("~"), "Documents")
+  "in downloads"              -> save_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+  Any full path               -> use as-is
 
-AVAILABLE SYSTEM FUNCTIONS:
+ALWAYS run: os.makedirs(save_dir, exist_ok=True)
+NEVER default to Desktop/Documents/CWD unless user explicitly says so.
+
+=== WINDOWS OS RULES ===
+BANNED commands (Linux-only, do NOT exist here): touch, rm, cat, ls, cp, mv, chmod, grep, sed, awk
+Use Python instead:
+  Create empty file:   open(path, "w").close()
+  Create with content: with open(path, "w") as f: f.write(content)
+  Create folders:      os.makedirs(path, exist_ok=True)
+  Delete files:        os.remove(path)
+  List files:          os.listdir(path)
+  Copy files:          import shutil; shutil.copy(src, dst)
+For terminal commands use PowerShell syntax (Get-ChildItem, not ls).
+
+=== PATH STRING RULES ===
+NEVER write: r"D:\\"  (raw strings cannot end with single backslash — syntax error)
+ALWAYS use forward slashes: "D:/folder/file.txt" — Python handles this on Windows.
+
+=== FOLDER CREATION ===
+"already exists" is SUCCESS. Always use: os.makedirs(path, exist_ok=True)
+
+=== EXECUTION RULES ===
+1. Check existing functions FIRST before generating new code
+2. Generate ONLY executable Python — no explanations, no markdown
+3. ALL imports are allowed — use any library
+4. Handle errors with try/except but ALWAYS attempt execution
+5. If a package is missing, auto-install: subprocess.run(["pip", "install", pkg])
+6. NEVER use input() — hardcode test values instead
+7. NEVER use 'return' outside a function — use print() instead
+8. Extract parameters from commands (numbers, paths, names) using regex or string parsing
+9. Use subprocess, os.system, ctypes, win32api — ALL methods allowed
+
+=== EXISTING FUNCTIONS (use before generating new code) ===
 {chr(10).join([f"- {name}: {info['description']}" for name, info in available_functions.items()])}
 
-FUNCTION MAPPINGS (use these for common commands):
+FUNCTION MAPPINGS:
 {chr(10).join([f"- '{cmd}' -> {func.__name__ if hasattr(func, '__name__') else str(func)}" for cmd, func in function_mappings.items()])}
 
-PRIORITY:
-1. Use existing functions first
-2. If no existing function, generate comprehensive code with multiple fallback methods
-3. Always try to accomplish the user's request, even if it requires advanced techniques
-4. Auto-install missing packages if needed
-5. Use any Windows API, registry, PowerShell, or system calls necessary
-
-DYNAMICALLY GENERATED CAPABILITIES (Available in execution context):
+=== DYNAMIC CAPABILITIES (pre-loaded in execution context) ===
 {self._format_dynamic_capabilities(capabilities)}
 
-AVAILABLE SYSTEM FUNCTIONS:
-{self._format_capabilities(capabilities)}
+All capabilities above are already loaded — call them directly by name.
+If you need a function that doesn't exist, define it completely first.
 
-CRITICAL FUNCTION AVAILABILITY RULES:
-1. ALL dynamically generated capabilities listed above are already loaded in the execution context
-2. You can directly call any of these functions by name - they are pre-defined
-3. If you need a function that doesn't exist, generate the complete function definition first
-4. NEVER call a function that hasn't been defined or loaded into the context
-5. Always check the dynamically generated capabilities list before creating new functions
+=== YOUTUBE ===
+For ANY YouTube command: use play_youtube_video_ultra_direct(search_term)
+NEVER generate new YouTube code or use webbrowser.open() for YouTube.
 
-For any task not covered by existing functions, generate code that:
-1. Attempts the task using standard libraries
-2. Includes comprehensive error handling
-3. Provides clear success/failure feedback
-
-IMPORTANT EXECUTION GUIDELINES:
-- NEVER use input() function as it causes execution timeouts in non-interactive environments
-- For programs that need test data, hardcode example values instead of asking for input
-- Use sys.argv for command-line arguments if input is needed, with fallback default values
-- Generate code that runs immediately without waiting for user interaction
-- If creating interactive programs, provide default test cases or use predefined data
-- CRITICAL: NEVER use 'return' statements outside of function definitions - this causes syntax errors
-- If you need to return a value from top-level code, use print() instead of return
-- Always wrap code in proper function definitions when using return statements
-- For simple operations, use direct execution or print() statements instead of return
-
-CRITICAL PARAMETER EXTRACTION RULES:
-- ALWAYS extract numerical values, levels, and parameters from user commands
-- For brightness commands like "set brightness to 34": extract the number and pass it as set_brightness(34)
-- For volume commands like "set volume to 50": extract the number and pass it as set_system_volume(50)
-- For any command with numbers/parameters: parse and extract them from the command string
-- Use regular expressions or string parsing to extract numerical values
-- Example: if command is "set brightness to 34", generate: set_brightness(34)
-- Example: if command is "turn volume to 75", generate: set_system_volume(75)
-- NEVER call functions without required parameters - always extract and pass them
-
-COMMON LIBRARY IMPORT PATTERNS:
-- For faker library: use "from faker import Faker" then "fake = Faker()"
-- For pandas: use "import pandas as pd" 
-- For Excel files: use "import openpyxl" and "pd.read_excel()" / "df.to_excel()"
-- For fake data generation: combine faker with pandas for realistic datasets
-
-WEB SCRAPING AND NEWS COLLECTION GUIDELINES:
-- Always include fallback content when web scraping fails - don't create empty files
-- Use multiple selector patterns for each website as selectors change frequently
-- Include error handling for each source and continue with others if one fails
-- Add fallback static content or alternative approaches when all scraping fails
-- For news scraping: include user-agent headers, respect robots.txt, handle rate limiting
-- Always verify file content before closing - ensure it's not empty
-- Provide clear feedback about what succeeded/failed in the scraping process
-- For AI news creation: Use create_ai_news_file() function which has robust fallback content
-- For any other news topics: Use create_news_file(topic) function which adapts sources and has topic-specific fallback content
-
-COMPREHENSIVE INFORMATION SCRAPING:
-- For searching ANY person or company: Use scrape_info_about(search_term, info_type) function (creates file directly)
-- For getting content string: Use scrape_info_content(search_term, info_type) function (returns content as string)
-- This function searches multiple sources: Google, Wikipedia, LinkedIn, Crunchbase, Yahoo Finance, BBC, Reuters
-- Supports different info types: "person", "company", "general", "news", "wiki"
-- Automatically extracts search terms from natural language commands like "find information about John Doe"
-- Has robust fallback content and never creates empty files
-- Handles rate limiting, multiple selectors, and website structure changes
-- IMPORTANT: scrape_info_about() returns boolean, scrape_info_content() returns string content
-
-SPECIAL INSTRUCTIONS FOR YOUTUBE OPERATIONS:
-- For DIRECT YouTube video playback (FASTEST): Use play_youtube_video_ultra_direct(search_term)
-- This is the most direct method - bypasses search page, gets direct video URL immediately
-- For general YouTube video searches: Use open_youtube_and_play_video(search_term) 
-- This function automatically detects if it's music or movie content and searches appropriately
-- For music/songs: "play despacito" searches for "despacito" (no trailer added)
-- For movies: "play avengers movie" searches for "avengers movie trailer"
-- For direct video playing: Use play_youtube_video_direct(search_term) for more advanced methods
-- For auto-clicking the first video after a search page loads: Use auto_click_first_youtube_video()
-- For skipping the first YouTube ad: Use skip_youtube_ad() or open_youtube_skip_ad_and_play(search_term)
-- The skip_youtube_ad() function automatically finds and clicks "Skip Ad" button using multiple methods
-- For complete experience (play video + skip first ad): Use open_youtube_skip_ad_and_play(search_term)
-- These functions use multiple automation methods including pyautogui, selenium, keyboard navigation, and Windows API
-- ALWAYS use these existing functions instead of generating new YouTube code or using generic webbrowser.open() calls
-
-NETWORK SPEED TESTING:
-- CRITICAL: If you get 'AttributeError: module speedtest has no attribute Speedtest', the wrong package is installed
-- Fix by running: subprocess.run(['pip', 'uninstall', 'speedtest', '-y'])
-- Then install correct package: subprocess.run(['pip', 'install', 'speedtest-cli'])
-- Import as: import speedtest (NOT speedtest-cli)
-- The package installs as 'speedtest-cli' but imports as 'speedtest'
-- Usage:
-  ```python
-  import subprocess
-  subprocess.run(['pip', 'uninstall', 'speedtest', '-y', '--quiet'])
-  subprocess.run(['pip', 'install', 'speedtest-cli', '--quiet'])
-  import speedtest
-  st = speedtest.Speedtest()
-  st.get_best_server()
-  download_speed = st.download() / 1000000  # Convert to Mbps
-  upload_speed = st.upload() / 1000000
-  ```
-
-PAINT AND DRAWING OPERATIONS:
-- For Paint automation, use simple keyboard shortcuts and mouse movements
-- CRITICAL: NEVER use pyautogui.locateOnScreen(), locateCenterOnScreen(), or similar image recognition functions
-- These functions require screenshot files that don't exist and will always fail
-- CRITICAL: Always maximize Paint window after opening to ensure consistent canvas size
-- Use these Paint keyboard shortcuts:
-  * Win+Up arrow to maximize window
-  * Alt+Space, X to maximize (alternative)
-  * Alt+F4 to close
-  * Ctrl+Z to undo
-  * ESC to cancel selection
-- For drawing shapes in Paint:
-  1. Open Paint with subprocess.Popen('mspaint')
-  2. Wait for it to open (time.sleep(3))
-  3. Maximize Paint window using pyautogui.hotkey('win', 'up') or alt+f4, x
-  4. Wait for window to maximize (time.sleep(1))
-  5. Get Paint window dimensions using pyautogui.getWindowsWithTitle()
-  6. Calculate center of canvas (window width/2, window height/2)
-  7. Click and drag to draw lines
-- Example for drawing a triangle: 
-  * Maximize Paint window first (ALWAYS do this)
-  * Get window dimensions using pyautogui.getWindowsWithTitle("Untitled - Paint")
-  * Calculate center coordinates
-  * Use pyautogui.drag() to draw three lines forming a triangle
-- Keep automation simple but always maximize window first
-- Use window-aware coordinates, not fixed absolute coordinates
-- NEVER search for UI elements or icon images
-
-Example patterns for Paint:
-```python
-# CORRECT Paint automation approach:
-import subprocess
-import time
-import pyautogui
-
-# Open Paint
-subprocess.Popen('mspaint')
-time.sleep(3)
-
-# ALWAYS maximize the window first
-pyautogui.hotkey('win', 'up')
-time.sleep(1)
-
-# Get window dimensions for accurate positioning
-windows = pyautogui.getWindowsWithTitle("Untitled - Paint")
-if windows:
-    window = windows[0]
-    # Calculate center of canvas
-    center_x = window.left + window.width // 2
-    center_y = window.top + window.height // 2
-    
-    # Draw using center-relative coordinates
-    pyautogui.moveTo(center_x - 100, center_y + 50)
-    pyautogui.drag(200, 0, duration=0.5)  # First line of triangle
-    pyautogui.drag(-100, -150, duration=0.5)  # Second line
-    pyautogui.drag(-100, 150, duration=0.5)  # Third line
-
-# WRONG approach (DO NOT USE):
-# pyautogui.locateCenterOnScreen('tool.png')  # Requires image file
-# pyautogui.click(100, 150)  # Fixed coordinates won't work
-```
-
-Other examples:
-```python
-# Parameter extraction for system functions
-import re
-
-# Extract brightness level from command
-command = "set brightness to 34"
-brightness_match = re.search(r'(\\d+)', command)
-if brightness_match:
-    brightness_level = int(brightness_match.group(1))
-    result = set_brightness(brightness_level)
-    print(f"Brightness set to {{brightness_level}}%")
-else:
-    print("Could not extract brightness level")
-
-# Extract volume level from command  
-command = "set volume to 50"
-volume_match = re.search(r'(\\d+)', command)
-if volume_match:
-    volume_level = int(volume_match.group(1))
-    result = set_system_volume(volume_level)
-    print(f"Volume set to {{volume_level}}%")
-```
-
-```python
-# File operation
-try:
-    with open(context["filename"], "r") as f:
-        content = f.read()
-    # Process content
-    print("Task completed successfully")
-except Exception as e:
-    print(f"Error: {{e}}")
-```
-
-```python
-# System operation with parameters
-try:
-    result = some_system_function(required_parameter_value)
-    if result:
-        print("Operation successful")
-    else:
-        print("Operation failed")
-except Exception as e:
-    print(f"Error: {{e}}")
-```
-
-Generate code that is safe, robust, and follows these patterns.
+Generate code that is safe, robust, and handles errors gracefully.
 """
         return prompt
     
@@ -685,15 +464,12 @@ Generate code that is safe, robust, and follows these patterns.
                 cleaned_lines.append(line)
                 continue
             elif line_stripped and not line.startswith(' ' * function_depth if function_depth > 0 else '') and in_function:
-                # We're out of the function block
                 in_function = False
                 function_depth = 0
             
             # Check for return statements outside functions
             if line_stripped.startswith('return ') and not in_function:
-                # Wrap standalone return in a function or convert to print
                 if 'return' in line_stripped and '=' in line_stripped:
-                    # This might be a return value assignment, convert to variable
                     cleaned_line = line_stripped.replace('return ', 'result = ')
                     if cleaned_line != line_stripped:
                         cleaned_lines.append(cleaned_line)
@@ -701,36 +477,17 @@ Generate code that is safe, robust, and follows these patterns.
                     else:
                         cleaned_lines.append(line)
                 else:
-                    # Convert return to print for standalone returns
                     return_value = line_stripped.replace('return ', '').strip()
                     if return_value:
                         cleaned_lines.append(f'print({return_value})')
                     else:
                         cleaned_lines.append('print("Operation completed")')
             elif 'input(' in line and 'def' not in line:
-                # Fix input() calls that cause timeouts
-                if 'palindrome' in code.lower() and 'input' in line.lower():
-                    # For palindrome programs, use a test string
-                    line = line.replace('input("Enter a string: ")', '"racecar"')
-                    line = line.replace('input("Enter text: ")', '"racecar"')
-                    line = line.replace('input()', '"racecar"')
-                    cleaned_lines.append(line)
-                    cleaned_lines.append('print(f"Testing with: racecar")')
-                elif 'number' in code.lower() and 'input' in line.lower():
-                    # For number programs, use a test number
-                    line = line.replace('input("Enter a number: ")', '42')
-                    line = line.replace('input()', '42')
-                    cleaned_lines.append(line)
-                    cleaned_lines.append('print(f"Testing with: 42")')
-                else:
-                    # Generic replacement for other input() calls
-                    line = line.replace('input()', '"test_input"')
-                    line = line.replace('input("', '"test_input"')
-                    # Handle cases with prompts
-                    import re
-                    line = re.sub(r'input\("[^"]*"\)', '"test_input"', line)
-                    cleaned_lines.append(line)
-                    cleaned_lines.append('print("Using test input instead of waiting for user input")')
+                # Replace input() calls with test data to prevent timeouts
+                import re
+                line = re.sub(r'input\(["\'][^"\']*["\']\)', '"test_input"', line)
+                line = line.replace('input()', '"test_input"')
+                cleaned_lines.append(line)
             else:
                 cleaned_lines.append(line)
         
@@ -746,15 +503,9 @@ Generate code that is safe, robust, and follows these patterns.
             ast.parse(cleaned_code)
         except SyntaxError as e:
             logging.warning(f"Syntax error detected in cleaned code: {e}")
-            # Try to fix common syntax issues
             if "'return' outside function" in str(e):
-                # Wrap the entire code in a function if it has standalone returns
                 if 'return ' in cleaned_code and not cleaned_code.strip().startswith('def '):
                     cleaned_code = f"def main():\n    " + cleaned_code.replace('\n', '\n    ') + "\n\nmain()"
-        
-        # Add a note if we made changes
-        if 'input(' in code and 'input(' not in cleaned_code:
-            cleaned_code += '\n# Note: Replaced input() calls with test data to prevent execution timeouts'
         
         return cleaned_code
 

@@ -9,6 +9,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Tuple
 from enum import IntEnum
+from config import config
+from google import genai
 
 
 class MatchQuality(IntEnum):
@@ -80,8 +82,9 @@ class IntentRouter:
         
         # File Operations
         {"name": "open_file_explorer", "description": "Open file explorer/file manager", "params": {}},
-        {"name": "create_folder", "description": "Create a new folder/directory", "params": {"name": "str"}},
-        {"name": "create_file", "description": "Create a new file with optional content", "params": {"file_name": "str", "content": "str (optional)", "location": "str (optional, e.g., 'D' or 'D drive' or full path)"}},
+        # NOTE: create_folder, create_file, create_powerpoint_presentation, create_ai_news_file
+        # are intentionally NOT listed here — all file/document creation goes to GENERATE_CODE
+        # so the code generator handles any complexity of content creation.
         
         # System Operations
         {"name": "take_screenshot", "description": "Take a screenshot", "params": {}},
@@ -130,13 +133,11 @@ class IntentRouter:
         {"name": "next_track", "description": "Skip to next track/song", "params": {}},
         {"name": "previous_track", "description": "Go to previous track/song", "params": {}},
         
-        # PowerPoint
-        {"name": "create_powerpoint_presentation", "description": "Create a PowerPoint presentation", "params": {"topic": "str"}},
-        
-        # News
-        {"name": "get_news", "description": "Get latest news headlines", "params": {}},
-        {"name": "create_ai_news_file", "description": "Get AI/tech news", "params": {}},
-        
+        # News (browser open - kept)
+        {"name": "get_news", "description": "Open Google News in browser to see latest headlines", "params": {}},
+        # NOTE: create_powerpoint_presentation and create_ai_news_file intentionally removed
+        # — all document/file creation goes to GENERATE_CODE for full LLM power.
+
         # Terminal
         {"name": "run_terminal_command", "description": "Run a terminal/command line command", "params": {"command": "str"}},
         {"name": "open_terminal", "description": "Open terminal/PowerShell/CMD", "params": {}},
@@ -198,20 +199,24 @@ class IntentRouter:
     ]
     
     def __init__(self):
-        self._ai_client = None
         self._tools_prompt = self._build_tools_prompt()
+
+        # --- Intent Router uses its own dedicated API key ---
+        # Set GEMINI_API_KEY_INTENT in .env to isolate its quota.
+        # Falls back to the shared GEMINI_API_KEY if not set.
+        intent_key = config.api_key_intent
+        if intent_key:
+            self._client = genai.Client(api_key=intent_key)
+            logging.info(
+                f"[IntentRouter] Dedicated client ready. "
+                f"Key: {intent_key[:10]}...{intent_key[-4:]} (GEMINI_API_KEY_INTENT)"
+            )
+        else:
+            self._client = None
+            logging.error("[IntentRouter] No API key — set GEMINI_API_KEY_INTENT or GEMINI_API_KEY in .env")
+
+        self._model = "gemini-2.5-flash"
         logging.info(f"LLM Intent Router initialized with {len(self.KNOWN_TOOLS)} tools")
-    
-    @property
-    def ai_client(self):
-        """Lazy load AI client"""
-        if self._ai_client is None:
-            try:
-                from ai_client import ai_client
-                self._ai_client = ai_client
-            except Exception as e:
-                logging.error(f"Could not load AI client: {e}")
-        return self._ai_client
     
     def _build_tools_prompt(self) -> str:
         """Build the tools list for the LLM prompt"""
@@ -263,8 +268,8 @@ class IntentRouter:
             )
         
         # Use LLM to understand intent
-        if not self.ai_client:
-            logging.error("AI client not available, falling back to code generation")
+        if not self._client:
+            logging.error("[IntentRouter] No Gemini client available, falling back to code generation")
             return RouteResult(
                 confidence=0.0,
                 match_type="none",
@@ -318,11 +323,15 @@ JSON RESPONSE:"""
         import time
         max_retries = 3
         response_text = "{}"
-        
+
+        if not self._client:
+            logging.error("[IntentRouter] No Gemini client available")
+            raise RuntimeError("Intent router has no API client")
+
         for attempt in range(max_retries):
             try:
-                response = self.ai_client.client.models.generate_content(
-                    model=self.ai_client.model,
+                response = self._client.models.generate_content(
+                    model=self._model,
                     contents=prompt
                 )
                 response_text = response.text.strip()
@@ -333,11 +342,10 @@ JSON RESPONSE:"""
                 if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
                     if attempt < max_retries - 1:
                         wait_time = 2 ** (attempt + 1)  # 2, 4 seconds
-                        logging.warning(f"Rate limit hit in intent classification, waiting {wait_time}s (retry {attempt + 2}/{max_retries})")
+                        logging.warning(f"[IntentRouter] Rate limit hit, waiting {wait_time}s (retry {attempt + 2}/{max_retries})")
                         time.sleep(wait_time)
                         continue
-                logging.error(f"Intent classification error: {e}")
-                # If we fail completely, return early to trigger fallback
+                logging.error(f"[IntentRouter] Classification error: {e}")
                 if attempt == max_retries - 1:
                     raise
         

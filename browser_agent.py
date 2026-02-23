@@ -52,15 +52,28 @@ except ImportError:
 
 
 def _ensure_google_api_key():
-    """Ensure GOOGLE_API_KEY is set (browser-use uses this env var)."""
-    if not os.environ.get("GOOGLE_API_KEY"):
-        # Try to use the existing GEMINI_API_KEY
-        gemini_key = os.environ.get("GEMINI_API_KEY", "")
-        if gemini_key:
-            # If comma-separated (multiple keys), use the first one
-            first_key = gemini_key.split(",")[0].strip()
-            os.environ["GOOGLE_API_KEY"] = first_key
-            return True
+    """Ensure GOOGLE_API_KEY is set for the browser-use library.
+
+    Priority:
+      1. GEMINI_API_KEY_BROWSER  (dedicated browser key)
+      2. GOOGLE_API_KEY          (already in env)
+      3. GEMINI_API_KEY          (shared fallback)
+    """
+    # Use the dedicated browser key if available
+    from config import config
+    browser_key = config.api_key_browser  # reads GEMINI_API_KEY_BROWSER or falls back
+
+    if browser_key:
+        # browser-use reads GOOGLE_API_KEY; set it to our chosen key
+        first_key = browser_key.split(",")[0].strip()
+        os.environ["GOOGLE_API_KEY"] = first_key
+        logging.info(
+            f"[BrowserAgent] Using key: {first_key[:10]}...{first_key[-4:]} "
+            f"(GEMINI_API_KEY_BROWSER → GOOGLE_API_KEY)"
+        )
+        return True
+
+    # Final fallback: already in env?
     return bool(os.environ.get("GOOGLE_API_KEY"))
 
 

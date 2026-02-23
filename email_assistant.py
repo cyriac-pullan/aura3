@@ -16,10 +16,8 @@ import subprocess
 from pathlib import Path
 from typing import Tuple, Optional
 from urllib.parse import quote
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from google import genai
+from config import config
 
 
 class EmailAssistant:
@@ -34,20 +32,20 @@ class EmailAssistant:
     """
     
     def __init__(self):
-        self._ai_client = None
         self.drafts_dir = Path.home() / "Documents" / "AURA_Drafts"
         self.drafts_dir.mkdir(exist_ok=True)
-    
-    @property
-    def ai_client(self):
-        """Lazy load AI client"""
-        if self._ai_client is None:
-            try:
-                from ai_client import ai_client
-                self._ai_client = ai_client
-            except ImportError as e:
-                print(f"[Email] AI client not available: {e}")
-        return self._ai_client
+
+        # --- Email Assistant uses its own dedicated API key ---
+        # Set GEMINI_API_KEY_EMAIL in .env to isolate email quota.
+        email_key = config.api_key_email
+        if email_key:
+            self._client = genai.Client(api_key=email_key)
+            self._model = "gemini-2.5-flash"
+            print(f"[Email] Client ready. Key: {email_key[:10]}...{email_key[-4:]} (GEMINI_API_KEY_EMAIL)")
+        else:
+            self._client = None
+            self._model = None
+            print("[Email] ⚠️  No API key — set GEMINI_API_KEY_EMAIL or GEMINI_API_KEY in .env")
     
     def draft_email(self, instruction: str, recipient: str = None, 
                     tone: str = "professional") -> Tuple[bool, str, dict]:
@@ -62,8 +60,8 @@ class EmailAssistant:
         Returns:
             (success, message, email_dict with subject, body, to)
         """
-        if not self.ai_client:
-            return False, "AI client not available.", {}
+        if not self._client:
+            return False, "AI client not available — check GEMINI_API_KEY_EMAIL in .env", {}
         
         print(f"\n{'='*50}")
         print(f"📧 AURA Email Assistant")
@@ -95,8 +93,8 @@ IMPORTANT: Return ONLY a JSON object with these fields:
 Do NOT include any markdown formatting or explanation. Return ONLY the JSON."""
 
         try:
-            response = self.ai_client.client.models.generate_content(
-                model=self.ai_client.model,
+            response = self._client.models.generate_content(
+                model=self._model,
                 contents=prompt,
             )
             
