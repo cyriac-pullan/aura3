@@ -270,84 +270,33 @@ def get_brightness() -> int:
         return 0
 
 def set_brightness(level: int) -> bool:
-    """Set brightness to specific level (0-100)"""
+    """Set brightness to specific level (0-100) automatically."""
     try:
+        import screen_brightness_control as sbc
+        
         if not 0 <= level <= 100:
-            raise ValueError("Brightness must be 0-100")
+            raise ValueError("Brightness must be between 0 and 100")
         
-        current_brightness = get_brightness()
-        print(f"Current brightness: {current_brightness}%")
-        print(f"Setting brightness to {level}%")
+        # Try setting brightness for all detected displays
+        monitors = sbc.list_monitors()
         
-        # Strategy 1: PowerShell with WMI brightness control (most reliable)
-        try:
-            ps_command = f"""
-            try {{
-                $BrightnessMethods = Get-WmiObject -Namespace root\\\\wmi -Class WmiMonitorBrightnessMethods -ErrorAction SilentlyContinue
-                
-                if ($BrightnessMethods) {{
-                    $TargetBrightness = {level}
-                    foreach ($method in $BrightnessMethods) {{
-                        try {{
-                            $method.WmiSetBrightness(1, $TargetBrightness)
-                            Write-Output "Monitor brightness set to $TargetBrightness%"
-                        }} catch {{
-                            Write-Warning "Failed to set brightness for monitor: $_"
-                        }}
-                    }}
-                    exit 0
-                }} else {{
-                    $Monitors = Get-WmiObject -Namespace root\\\\wmi -Class WmiMonitorBrightness -ErrorAction SilentlyContinue
-                    if ($Monitors) {{
-                        $BrightnessClass = Get-WmiObject -Namespace root\\\\wmi -Class WmiMonitorBrightnessMethods -ErrorAction SilentlyContinue
-                        if ($BrightnessClass) {{
-                            $BrightnessClass.WmiSetBrightness(1, {level})
-                            Write-Output "Alternative method: brightness set to {level}%"
-                            exit 0
-                        }}
-                    }}
-                }}
-                
-                Write-Error "WMI brightness control not available"
-                exit 1
-            }} catch {{
-                Write-Error "PowerShell brightness control failed: $_"
-                exit 1
-            }}
-            """
-            
-            result = subprocess.run(["powershell", "-Command", ps_command],
-                                  capture_output=True, text=True, timeout=10)
-            
-            if result.returncode == 0:
-                print(f"✅ Brightness successfully set to {level}%")
-                return True
-            else:
-                print(f"⚠️ PowerShell method failed: {result.stderr}")
-                
-        except Exception as e:
-            print(f"⚠️ PowerShell method failed: {e}")
+        if not monitors:
+            print("No controllable monitors detected.")
+            return False
         
-        # Strategy 2: Open Windows Display settings so user can adjust
-        try:
-            settings_uri = "ms-settings:display"
-            result = subprocess.run(["start", settings_uri], shell=True, capture_output=True, text=True, timeout=5)
-            
-            if result.returncode == 0:
-                print(f"🔧 Opened Windows Display Settings")
-                print(f"💡 Please manually set brightness to {level}% in the opened settings")
-                return True
-                
-        except Exception as e:
-            print(f"⚠️ Settings method failed: {e}")
+        sbc.set_brightness(level)
         
-        print(f"⚠️ Automatic brightness control not available on this system")
+        print(f"✅ Brightness set to {level}% for {len(monitors)} monitor(s)")
+        return True
+        
+    except ImportError:
+        print("❌ screen-brightness-control not installed")
         return False
         
     except Exception as e:
-        print(f"Error setting brightness: {e}")
+        print(f"❌ Brightness control failed: {e}")
         return False
-
+        
 def open_file_explorer(path: Optional[str] = None) -> bool:
     """Opens File Explorer at specified path or default location."""
     try:

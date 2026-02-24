@@ -162,7 +162,7 @@ if PYQT_AVAILABLE:
                 profile_directory=profile_dir,
                 headless=False,  # Show the browser
                 # Keep browser alive after task completes so you can see results
-                keep_alive=False
+                keep_alive=True
             )
             
             full_task = self.task
