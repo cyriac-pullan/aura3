@@ -146,26 +146,9 @@ class CapabilityManager:
         return f"{func_node.name}({', '.join(args)}){returns}"
     
     def _add_to_utils_module(self, function_code: str, command: str):
-        """Add function to windows_system_utils.py"""
-        try:
-            # Read current utils module
-            if self.utils_module_path.exists():
-                with open(self.utils_module_path, 'r', encoding='utf-8') as f:
-                    current_content = f.read()
-            else:
-                current_content = ""
-            
-            # Add new function
-            new_content = current_content + f"\n\n# Auto-generated for: {command}\n{function_code}\n"
-            
-            with open(self.utils_module_path, 'w', encoding='utf-8') as f:
-                f.write(new_content)
-            
-            # Reload the module to make function available
-            self._reload_utils_module()
-            
-        except Exception as e:
-            logging.error(f"Error adding to utils module: {e}")
+        """Store capability only in JSON — do NOT append code to windows_system_utils.py.
+        This prevents auto-generated module-level code from running on import."""
+        logging.info(f"Capability stored in JSON (not injected into utils): {command}")
     
     def _reload_utils_module(self):
         """Reload the utils module to pick up new functions"""
