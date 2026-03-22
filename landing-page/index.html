@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AURA — Intelligent Desktop Assistant for Windows</title>
+  <meta name="description"
+    content="AURA is a goal-oriented AI desktop assistant that automates Windows tasks with voice commands, 50+ deterministic tools, and a secure three-layer architecture.">
+  <meta name="keywords"
+    content="AI assistant, desktop automation, Windows, voice assistant, LLM agent, goal-oriented AI">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap"
+    rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════
+       1. NAVIGATION
+       ═══════════════════════════════════════ -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <a href="#" class="nav-logo">AURA</a>
+
+      <div class="nav-links" id="navLinks">
+        <a href="#features">Features</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#performance">Performance</a>
+        <a href="https://github.com/cyriac-pullan/aura3" target="_blank" rel="noopener" class="nav-github"
+          aria-label="GitHub">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+          </svg>
+        </a>
+        <a href="#download" class="nav-cta">↓ Download</a>
+      </div>
+
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+
+  <!-- ═══════════════════════════════════════
+       2. HERO SECTION
+       ═══════════════════════════════════════ -->
+  <section class="hero" id="hero">
+    <div class="hero-orb"></div>
+    <div class="hero-orb-2"></div>
+
+    <div class="hero-content">
+      <div class="hero-badge">🧠 AI-Powered Desktop Automation</div>
+
+      <h1 class="hero-title">
+        Your Intelligent<br>
+        <span class="gradient-text">Desktop Assistant</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        A goal-oriented agentic architecture for deterministic desktop automation.
+        Speak naturally, and AURA intelligently plans and executes — securely, every time.
+      </p>
+
+      <div class="hero-buttons">
+        <a href="#download" class="btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Download for Windows
+        </a>
+        <a href="https://github.com/cyriac-pullan/aura3" target="_blank" rel="noopener" class="btn-secondary">
+          View on GitHub →
+        </a>
+      </div>
+
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="value">50+</div>
+          <div class="label">System Tools</div>
+        </div>
+        <div class="hero-stat">
+          <div class="value">14</div>
+          <div class="label">Intent Categories</div>
+        </div>
+        <div class="hero-stat">
+          <div class="value">3-Layer</div>
+          <div class="label">Architecture</div>
+        </div>
+        <div class="hero-stat">
+          <div class="value">Zero</div>
+          <div class="label">Code Execution Risk</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════
+       3. FEATURES
+       ═══════════════════════════════════════ -->
+  <section class="section features" id="features">
+    <div class="container">
+      <div class="section-label">Capabilities</div>
+      <h2 class="section-title">Why AURA?</h2>
+      <p class="section-subtitle">Built from the ground up as a research project, AURA brings enterprise-grade
+        automation to your desktop.</p>
+
+      <div class="features-grid reveal-stagger">
+        <div class="feature-card reveal">
+          <span class="feature-icon">🎯</span>
+          <h3>Goal-Oriented AI</h3>
+          <p>Understands semantic goals — "open YouTube and search nvidia" is intelligently merged into one optimized
+            action, not two separate steps.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <span class="feature-icon">🗣️</span>
+          <h3>Voice & Wake Word</h3>
+          <p>Say "Hey AURA" for hands-free control. Offline wake-word detection with continuous speech recognition built
+            in.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <span class="feature-icon">🔧</span>
+          <h3>50+ System Tools</h3>
+          <p>File operations, volume, brightness, screenshots, clipboard, window management, virtual desktops — all
+            deterministic, all built-in.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <span class="feature-icon">🛡️</span>
+          <h3>Secure by Design</h3>
+          <p>No exec() or eval(). Schema-validated LLM outputs. Domain-locked tool resolution prevents hallucinated or
+            dangerous actions.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <span class="feature-icon">🧠</span>
+          <h3>Multi-LLM Support</h3>
+          <p>Gemini, Ollama (local), OpenRouter. Hybrid mode: local-first for privacy, cloud fallback for reliability.
+            85-95% API cost reduction.</p>
+        </div>
+
+        <div class="feature-card reveal">
+          <span class="feature-icon">📱</span>
+          <h3>Remote Control</h3>
+          <p>Telegram bot integration for remote commands. Email via SMTP. Manage your PC from anywhere in the world.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════
+       4. ARCHITECTURE
+       ═══════════════════════════════════════ -->
+  <section class="section architecture" id="architecture">
+    <div class="container">
+      <div class="section-label">System Design</div>
+      <h2 class="section-title">Three-Layer Architecture</h2>
+      <p class="section-subtitle">Strict separation between AI reasoning and deterministic execution ensures safety and
+        reproducibility.</p>
+
+      <div class="arch-diagram">
+        <!-- Layer 1 -->
+        <div class="arch-layer reveal">
+          <div class="arch-layer-accent"></div>
+          <div class="arch-layer-header">
+            <span class="arch-layer-title">⚡ Layer 1 — Routing</span>
+            <span class="arch-layer-badge">0 Tokens (local)</span>
+          </div>
+          <p class="arch-layer-desc">Fast syntactic classification of queries into single or multi-goal categories.
+            Minimal LLM inference for maximum cost efficiency.</p>
+          <div class="arch-layer-components">
+            <span class="arch-component">GoalRouter</span>
+            <span class="arch-component">SinglePath</span>
+            <span class="arch-component">MultiPath</span>
+          </div>
+        </div>
+
+        <!-- Connector -->
+        <div class="arch-connector">
+          <span class="arch-connector-arrow">▼</span>
+        </div>
+
+        <!-- Layer 2 -->
+        <div class="arch-layer reveal">
+          <div class="arch-layer-accent"></div>
+          <div class="arch-layer-header">
+            <span class="arch-layer-title">🧠 Layer 2 — Reasoning</span>
+            <span class="arch-layer-badge">~100 Tokens</span>
+          </div>
+          <p class="arch-layer-desc">Semantic understanding through specialized agents. Extracts goals, builds
+            dependency graphs, and creates minimal executable plans.</p>
+          <div class="arch-layer-components">
+            <span class="arch-component">IntentAgent</span>
+            <span class="arch-component">GoalInterpreter</span>
+            <span class="arch-component">GoalPlanner</span>
+            <span class="arch-component">GoalOrchestrator</span>
+          </div>
+        </div>
+
+        <!-- Connector -->
+        <div class="arch-connector">
+          <span class="arch-connector-arrow">▼</span>
+        </div>
+
+        <!-- Layer 3 -->
+        <div class="arch-layer reveal">
+          <div class="arch-layer-accent"></div>
+          <div class="arch-layer-header">
+            <span class="arch-layer-title">🔒 Layer 3 — Execution</span>
+            <span class="arch-layer-badge">Deterministic</span>
+          </div>
+          <p class="arch-layer-desc">Domain-locked tool resolution with precondition enforcement. Every tool satisfies a
+            deterministic contract — same inputs, same results.</p>
+          <div class="arch-layer-components">
+            <span class="arch-component">ToolResolver</span>
+            <span class="arch-component">ToolExecutor</span>
+            <span class="arch-component">SafetyValidator</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════
+       5. HOW IT WORKS
+       ═══════════════════════════════════════ -->
+  <section class="section how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-label">Workflow</div>
+      <h2 class="section-title">From Voice to Action</h2>
+      <p class="section-subtitle">Natural language in, deterministic execution out. Here's how AURA processes a complex
+        command.</p>
+
+      <div class="timeline reveal-stagger">
+        <div class="timeline-step reveal">
+          <div class="timeline-icon">🎤</div>
+          <div class="timeline-step-number">Step 01</div>
+          <h3>Speak or Type</h3>
+          <p>"Hey AURA, create folder reports and put a summary inside it"</p>
+        </div>
+
+        <div class="timeline-step reveal">
+          <div class="timeline-icon">🧠</div>
+          <div class="timeline-step-number">Step 02</div>
+          <h3>Goal Extraction</h3>
+          <p>AURA extracts 2 dependent goals and builds a DAG with correct execution ordering</p>
+        </div>
+
+        <div class="timeline-step reveal">
+          <div class="timeline-icon">⚡</div>
+          <div class="timeline-step-number">Step 03</div>
+          <h3>Smart Execution</h3>
+          <p>Dependency-aware: folder created first, then file placed inside — deterministic and safe</p>
+        </div>
+
+        <div class="timeline-step reveal">
+          <div class="timeline-icon">✅</div>
+          <div class="timeline-step-number">Step 04</div>
+          <h3>Done</h3>
+          <p>"Folder 'reports' created with summary.txt inside. Anything else, sir?"</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════
+       6. PERFORMANCE
+       ═══════════════════════════════════════ -->
+  <section class="section performance" id="performance">
+    <div class="container">
+      <div class="section-label">Metrics</div>
+      <h2 class="section-title">Built for Efficiency</h2>
+      <p class="section-subtitle">Validated across 1000+ test queries with zero safety violations.</p>
+
+      <div class="perf-layout">
+        <div class="perf-stats reveal-stagger">
+          <div class="perf-stat reveal">
+            <span class="stat-value counter" data-target="95">0</span><span class="stat-suffix">%</span>
+            <div class="stat-label">API Cost Reduction</div>
+          </div>
+          <div class="perf-stat reveal">
+            <span class="stat-value counter" data-target="100">0</span><span class="stat-suffix">%</span>
+            <div class="stat-label">Deterministic Execution</div>
+          </div>
+          <div class="perf-stat reveal">
+            <span class="stat-value counter" data-target="0">0</span><span class="stat-suffix"></span>
+            <div class="stat-label">Hallucinated Executions</div>
+          </div>
+          <div class="perf-stat reveal">
+            <span class="stat-value counter" data-target="50">0</span><span class="stat-suffix">+</span>
+            <div class="stat-label">Built-in Tools</div>
+          </div>
+        </div>
+
+        <div class="reveal">
+          <table class="perf-table">
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>v1 Tokens</th>
+                <th>v2 Tokens</th>
+                <th>Savings</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Set brightness to 50</td>
+                <td>~500</td>
+                <td class="highlight">0</td>
+                <td class="savings">100%</td>
+              </tr>
+              <tr>
+                <td>Open Chrome</td>
+                <td>~500</td>
+                <td class="highlight">0</td>
+                <td class="savings">100%</td>
+              </tr>
+              <tr>
+                <td>Play YouTube video</td>
+                <td>~500</td>
+                <td class="highlight">0</td>
+                <td class="savings">100%</td>
+              </tr>
+              <tr>
+                <td>Mute volume</td>
+                <td>~500</td>
+                <td class="highlight">0</td>
+                <td class="savings">100%</td>
+              </tr>
+              <tr>
+                <td>What is AI? (question)</td>
+                <td>~800</td>
+                <td>~300</td>
+                <td class="savings">62%</td>
+              </tr>
+              <tr>
+                <td>Ambiguous command</td>
+                <td>~800</td>
+                <td>~100</td>
+                <td class="savings">87%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════
+       7. TECH STACK
+       ═══════════════════════════════════════ -->
+  <section class="section tech-stack" id="tech-stack">
+    <div class="container" style="text-align: center;">
+      <div class="section-label">Technology</div>
+      <h2 class="section-title">Built With</h2>
+
+      <div class="tech-badges reveal-stagger">
+        <div class="tech-badge reveal"><span class="tech-badge-icon">🐍</span> Python</div>
+        <div class="tech-badge reveal"><span class="tech-badge-icon">✨</span> Google Gemini</div>
+        <div class="tech-badge reveal"><span class="tech-badge-icon">🖼️</span> PyQt5</div>
+        <div class="tech-badge reveal"><span class="tech-badge-icon">🦙</span> Ollama</div>
+        <div class="tech-badge reveal"><span class="tech-badge-icon">🖱️</span> PyAutoGUI</div>
+        <div class="tech-badge reveal"><span class="tech-badge-icon">📡</span> Telegram Bot API</div>
+        <div class="tech-badge reveal"><span class="tech-badge-icon">🪟</span> Windows API</div>
+        <div class="tech-badge reveal"><span class="tech-badge-icon">📦</span> Inno Setup</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════
+       8. DOWNLOAD CTA
+       ═══════════════════════════════════════ -->
+  <section class="download-cta" id="download">
+    <div class="container">
+      <h2>Ready to try AURA?</h2>
+      <p class="cta-sub">Windows 10/11 · 64-bit · Free & Open Source</p>
+      <a href="https://github.com/cyriac-pullan/aura3/releases" target="_blank" rel="noopener" class="btn-download">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Download AURA-Setup.exe (v1.0.0)
+      </a>
+      <p class="cta-note">Requires a Gemini API key · <a href="https://github.com/cyriac-pullan/aura3#-quick-start"
+          target="_blank" rel="noopener">View Setup Guide</a></p>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════
+       9. FOOTER
+       ═══════════════════════════════════════ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <span class="nav-logo">AURA</span>
+          <p>Agentic Universal Reasoning Assistant — a goal-oriented AI architecture for safe, deterministic desktop
+            automation on Windows.</p>
+        </div>
+
+        <div>
+          <h4>Resources</h4>
+          <ul class="footer-links">
+            <li><a href="https://github.com/AuraSynth-Desktop/aura" target="_blank" rel="noopener">GitHub Repository</a>
+            </li>
+            <li><a href="https://github.com/cyriac-pullan/aura3#-quick-start" target="_blank"
+                rel="noopener">Documentation</a></li>
+            <li><a href="https://github.com/cyriac-pullan/aura3/releases" target="_blank" rel="noopener">Download
+                Installer</a></li>
+            <li><a href="https://github.com/AuraSynth-Desktop/aura/blob/main/LICENSE" target="_blank" rel="noopener">MIT
+                License</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4>Project</h4>
+          <ul class="footer-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#architecture">Architecture</a></li>
+            <li><a href="#performance">Performance</a></li>
+            <li><a href="#download">Download</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 AURA. Built by Cyriac Paul Pullan & Team at VJCET.</span>
+        <span>MIT License</span>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="script.js"></script>
+</body>
+
+</html>

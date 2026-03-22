@@ -1,7 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller Build Configuration for AURA Floating Widget
-Creates a standalone Windows executable with all dependencies bundled
+PyInstaller Build Configuration for AURA v2 Floating Widget
+Creates a standalone Windows executable with all dependencies bundled.
+
+Updated: 2026-03-22 for AURA v2 (goal-driven architecture)
 """
 
 import sys
@@ -10,11 +12,10 @@ import os
 block_cipher = None
 
 # Find Python DLL location and explicitly include it
-# This ensures the Python DLL is bundled even if PyInstaller doesn't detect it automatically
 python_dll_name = f'python{sys.version_info.major}{sys.version_info.minor}.dll'
 python_dll_path = os.path.join(os.path.dirname(sys.executable), python_dll_name)
 
-# Prepare binaries list - explicitly include Python DLL if it exists
+# Prepare binaries list
 binaries_list = []
 if os.path.exists(python_dll_path):
     binaries_list.append((python_dll_path, '.'))
@@ -22,61 +23,89 @@ if os.path.exists(python_dll_path):
 else:
     print(f"WARNING: Python DLL not found at: {python_dll_path}")
 
-# All Python files that need to be included
-# NOTE:
-# This .spec file lives in the "Installer" subfolder, while the main
-# widget entry-point lives in the top-level "aura_floating_widget" folder.
-# Use a relative path from this "Installer" directory to the script.
+# ── Analysis ──
+# This .spec file lives in the "Installer" subfolder.
+# Entry point is in the top-level "aura_floating_widget" folder.
 a = Analysis(
     ['..\\aura_floating_widget\\aura_widget.py'],
     pathex=['e:\\agent'],
     binaries=binaries_list,
-    datas=[
-        # API key helper for credential management
-        ('..\\api_key_helper.py', '.'),
-    ],
+    datas=[],
     hiddenimports=[
-        # Core AURA modules
-        'api_key_helper',
-        'aura_v2_bridge',
-        'wake_word_detector',
+        # ── Core AURA v2 modules ──
         'ai_client',
+        'config',
+        'user_config',
+
+        # ── v2 Goal-Driven Architecture ──
+        'aura_v2_bridge',
+        'goal',
+        'goal_router',
+        'strategy_planner',
+        'plan_executor',
+        'intent_router',
+        'function_executor',
+        'context_engine',
+        'multi_task_handler',
+
+        # ── System & Execution ──
+        'windows_system_utils',
+        'advanced_control',
         'code_executor',
         'capability_manager',
         'self_improvement',
-        'windows_system_utils',
-        'tts_manager',
-        'voice_input',
-        'voice_interface',
-        'intent_router',
-        'function_executor',
         'response_generator',
         'local_context',
-        'credit_manager',
-        
-        # PyQt5 modules
+        'app_creator',
+
+        # ── Communication ──
+        'email_assistant',
+        'telegram_bot',
+        'browser_agent',
+        'whatsapp_manager',
+
+        # ── Voice & TTS ──
+        'tts_manager',
+        'wake_word_detector',
+
+        # ── PyQt5 modules ──
         'PyQt5.QtCore',
         'PyQt5.QtGui',
         'PyQt5.QtWidgets',
-        
-        # API providers
+
+        # ── API providers ──
         'requests',
         'google.generativeai',
         'google.ai.generativelanguage',
-        'openai',
-        
-        # Voice/Speech
+        'google.genai',
+
+        # ── Voice/Speech ──
         'pyttsx3',
         'pyttsx3.drivers',
         'pyttsx3.drivers.sapi5',
         'speech_recognition',
-        
-        # System utilities
-        'keyring',
-        'keyring.backends',
-        'keyring.backends.Windows',
-        
-        # Other dependencies
+
+        # ── System utilities ──
+        'rapidfuzz',
+        'rapidfuzz.process',
+        'rapidfuzz.fuzz',
+        'pyautogui',
+        'PIL',
+        'PIL.Image',
+        'screen_brightness_control',
+        'wmi',
+        'comtypes',
+        'pycaw',
+        'pycaw.pycaw',
+        'pycaw.api',
+        'pycaw.callbacks',
+        'pycaw.constants',
+        'win32api',
+        'win32con',
+        'win32gui',
+        'win32process',
+
+        # ── Standard library (ensure bundled) ──
         'json',
         'pathlib',
         'threading',
@@ -84,6 +113,12 @@ a = Analysis(
         'datetime',
         'math',
         'random',
+        'dataclasses',
+        'enum',
+        'logging',
+        'asyncio',
+        'subprocess',
+        'smtplib',
     ],
     hookspath=[],
     hooksconfig={},
@@ -92,8 +127,21 @@ a = Analysis(
         'matplotlib',
         'numpy',
         'pandas',
-        'PIL',
+        'scipy',
         'tkinter',
+        'test',
+        'unittest',
+        # Heavy transitive deps AURA doesn't need
+        'torch',
+        'torchvision',
+        'torchaudio',
+        'tensorboard',
+        'cv2',
+        'opencv-python',
+        'pyarrow',
+        'IPython',
+        'notebook',
+        'jupyter',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -119,8 +167,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # Icon path is relative to this "Installer" directory
-    icon='jarvis_icon.ico',  # Use AURA icon
+    icon='jarvis_icon.ico',
 )
 
 coll = COLLECT(

@@ -4,9 +4,9 @@
 ; =====================================================
 
 #define MyAppName "AURA"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "AURA Team"
-#define MyAppURL "https://github.com/yourusername/aura"
+#define MyAppVersion "2.0.0"
+#define MyAppPublisher "Cyriac Paul Pullan"
+#define MyAppURL "https://github.com/cyriac-pullan/aura3"
 #define MyAppExeName "AURA.exe"
 
 [Setup]
