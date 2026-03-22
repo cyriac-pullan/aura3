@@ -82,13 +82,13 @@ class WhatsAppManager:
         logger.warning(f"File '{filename}' not found in {search_path}")
         return None
 
-    def _send_request_with_retry(self, endpoint: str, payload: dict, retries: int = 20, delay: int = 2) -> bool:
+    def _send_request_with_retry(self, endpoint: str, payload: dict, retries: int = 30, delay: int = 2) -> bool:
         """Sends a request to the WhatsApp service with retries for readiness."""
         url = f"{API_URL}/{endpoint}"
         
         for attempt in range(retries):
             try:
-                response = requests.post(url, json=payload, timeout=30)
+                response = requests.post(url, json=payload, timeout=60)
                 
                 if response.status_code == 200:
                     return True
